@@ -11,12 +11,15 @@ declare global {
 let tokenClient: any;
 let gapiInited = false;
 let gisInited = false;
-let accessToken: string | null = null;
+
+// We store the pending promise resolver here so the callback can access it
+let resolveAuthPromise: ((value: boolean) => void) | null = null;
 
 export const GoogleCalendarService = {
   
   initialize: async () => {
     return new Promise<void>((resolve, reject) => {
+      // 1. Load GAPI (for making API requests)
       if (window.gapi) {
         window.gapi.load('client', async () => {
           try {
@@ -25,24 +28,38 @@ export const GoogleCalendarService = {
               discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
             });
             gapiInited = true;
-            maybeResolve();
+            checkResolve();
           } catch (err) {
             console.error("Error initializing GAPI client", err);
           }
         });
       }
 
+      // 2. Load GIS (for Authentication)
       if (window.google) {
-        tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_CONFIG.clientId,
-          scope: GOOGLE_CONFIG.scope,
-          callback: '', 
-        });
-        gisInited = true;
-        maybeResolve();
+        try {
+          // Initialize Token Client properly with the callback defined UPFRONT
+          tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CONFIG.clientId,
+            scope: GOOGLE_CONFIG.scope,
+            callback: (resp: any) => {
+               if (resp.error) {
+                 console.error("Auth Error:", resp);
+                 if (resolveAuthPromise) resolveAuthPromise(false);
+                 return;
+               }
+               // Success
+               if (resolveAuthPromise) resolveAuthPromise(true);
+            },
+          });
+          gisInited = true;
+          checkResolve();
+        } catch (e) {
+          console.error("GIS Init Error", e);
+        }
       }
 
-      function maybeResolve() {
+      function checkResolve() {
         if (gapiInited && gisInited) {
           resolve();
         }
@@ -51,31 +68,30 @@ export const GoogleCalendarService = {
   },
 
   authenticate: async (): Promise<boolean> => {
+    // Ensure initialized
     if (!tokenClient) {
         try {
             await GoogleCalendarService.initialize();
         } catch(e) { 
+            console.error(e);
             return false; 
         }
     }
 
     return new Promise((resolve) => {
-      if (!tokenClient) return resolve(false);
-
-      tokenClient.callback = async (resp: any) => {
-        if (resp.error) {
-          console.error(resp);
-          resolve(false);
-        }
-        accessToken = resp.access_token;
-        resolve(true);
-      };
-
-      if (window.gapi.client.getToken() === null) {
-        tokenClient.requestAccessToken({ prompt: 'consent' });
-      } else {
-        tokenClient.requestAccessToken({ prompt: '' });
+      if (!tokenClient) {
+        alert("Google API failed to load. Check your ad blocker.");
+        resolve(false);
+        return;
       }
+
+      // Store the resolve function so the global callback can call it
+      resolveAuthPromise = resolve;
+
+      // Trigger the popup
+      // NOTE: If you get 'redirect_uri_mismatch', ensure your origin (e.g. localhost:5173) 
+      // is added to 'Authorized Javascript Origins' in Google Cloud Console.
+      tokenClient.requestAccessToken({ prompt: 'consent' });
     });
   },
 
@@ -84,7 +100,6 @@ export const GoogleCalendarService = {
     if (token !== null) {
       window.google.accounts.oauth2.revoke(token.access_token, () => {
         window.gapi.client.setToken('');
-        accessToken = null;
       });
     }
   },
@@ -100,7 +115,7 @@ export const GoogleCalendarService = {
         const calendarListResponse = await window.gapi.client.calendar.calendarList.list();
         calendars = calendarListResponse.result.items || [];
       } catch (listErr) {
-        console.warn("Could not list all calendars (scope issue?), defaulting to Primary only.", listErr);
+        console.warn("Could not list all calendars, defaulting to Primary.", listErr);
         calendars = [{ id: 'primary', summary: 'Primary', primary: true }];
       }
 
@@ -110,7 +125,7 @@ export const GoogleCalendarService = {
 
       let allEvents: MeetEvent[] = [];
       
-      // Calculate 1 year ago from today to prevent loading decades of history causing a crash
+      // Calculate 1 year ago from today
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
@@ -119,12 +134,10 @@ export const GoogleCalendarService = {
         try {
             const response = await window.gapi.client.calendar.events.list({
                 'calendarId': cal.id,
-                // OPTIMIZATION: Fetch from 1 year ago instead of fixed 2023.
-                // This prevents fetching thousands of irrelevant old events that crash the browser memory.
                 'timeMin': oneYearAgo.toISOString(), 
                 'showDeleted': false,
                 'singleEvents': true,
-                'maxResults': 2000, // Reduced slightly to ensure stability
+                'maxResults': 2000, 
                 'orderBy': 'startTime',
             });
 
@@ -134,7 +147,6 @@ export const GoogleCalendarService = {
                 const start = ev.start.dateTime || ev.start.date;
                 const end = ev.end.dateTime || ev.end.date;
                 
-                // Handle missing end time (sometimes happens with all-day events)
                 const dateObj = new Date(start);
                 const dateStr = dateObj.toISOString().split('T')[0];
                 const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -145,7 +157,6 @@ export const GoogleCalendarService = {
                     endTimeStr = endObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
                 }
 
-                // Distinguish calendar source
                 const isPrimary = cal.primary;
 
                 return {
@@ -156,7 +167,7 @@ export const GoogleCalendarService = {
                     date: dateStr,
                     startTime: timeStr === 'Invalid Date' ? '00:00' : timeStr,
                     endTime: endTimeStr === 'Invalid Date' ? '23:59' : endTimeStr,
-                    platform: isPrimary ? (ev.location || 'Google Calendar') : `${cal.summary}`, // Show Calendar Name
+                    platform: isPrimary ? (ev.location || 'Google Calendar') : `${cal.summary}`, 
                     meetLink: ev.htmlLink,
                     notes: ev.description || '',
                     reminders: []
@@ -169,8 +180,6 @@ export const GoogleCalendarService = {
       });
 
       const results = await Promise.all(promises);
-      
-      // Flatten results
       results.forEach(calEvents => {
           allEvents = [...allEvents, ...calEvents];
       });
@@ -187,7 +196,6 @@ export const GoogleCalendarService = {
   createEvent: async (event: MeetEvent): Promise<string | null> => {
     if (!gapiInited) return null;
     
-    // Convert HH:MM to DateTime
     const startDateTime = new Date(`${event.date}T${event.startTime}:00`);
     const endDateTime = new Date(`${event.date}T${event.endTime}:00`);
 
@@ -207,7 +215,7 @@ export const GoogleCalendarService = {
 
     try {
       const request = window.gapi.client.calendar.events.insert({
-        'calendarId': 'primary', // Always create on primary
+        'calendarId': 'primary', 
         'resource': gEvent,
       });
       const response = await request.execute();

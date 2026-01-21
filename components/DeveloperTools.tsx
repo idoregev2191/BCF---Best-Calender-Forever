@@ -51,7 +51,7 @@ const DeveloperTools: React.FC<DeveloperToolsProps> = ({ onReset }) => {
           </div>
           <div className="mt-4 pt-2 border-t border-slate-700 text-[10px] text-slate-500 text-center">
              {/* REMINDER: ALWAYS UPDATE VERSION NUMBER WHEN CHANGING VERSIONS */}
-            Build: v1.3.2 (Stability Fix)
+            Build: v1.3.3 (Hotfix Auth)
           </div>
         </div>
       )}

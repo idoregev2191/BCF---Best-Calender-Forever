@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserState, MeetEvent, StandaloneReminder } from '../types';
-import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Check, RefreshCw, LogOut } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Check, RefreshCw, LogOut, Calendar as CalendarIcon } from 'lucide-react';
 import EventModal from './EventModal';
 import AddEventModal from './AddEventModal';
 import DeveloperTools from './DeveloperTools';
@@ -59,11 +59,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   const handleGoogleAuth = async () => {
     if (googleConnected) {
-      // Disconnect
       GoogleCalendarService.signOut();
       setGoogleConnected(false);
-      // In a real app we'd remove the google events from the state here
-      window.location.reload(); // Simple way to clear the view of google events
+      window.location.reload(); 
       return;
     }
 
@@ -74,9 +72,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         setGoogleConnected(true);
         const events = await GoogleCalendarService.fetchEvents();
         events.forEach(onAddEvent);
+      } else {
+        alert("Sync failed. If you see 'redirect_uri_mismatch', your current URL is not whitelisted in the Google Cloud Console.");
       }
-    } catch(e) { console.error(e); }
-    setTimeout(() => setIsSyncing(false), 1000);
+    } catch(e) { 
+        console.error(e);
+        alert("An unexpected error occurred during sync.");
+    }
+    setIsSyncing(false);
   };
 
   const formattedTitle = viewMode === 'day' 
@@ -175,51 +178,68 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   return (
     <div className="flex flex-col h-full overflow-hidden pb-20 w-full">
       
-      {/* Top Navigation Bar - Now Expanded */}
+      {/* Top Navigation Bar - Enhanced Apple-like Design */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between px-2 mb-6 gap-6">
         <div>
            {/* BCF Branding + Title */}
-           <div className="flex items-center gap-4 mb-2">
-             <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center text-xl shadow-lg border-2 border-white/50">📅</div>
-             <h1 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight">BCF</h1>
-             <div className="h-8 w-[2px] bg-slate-300 mx-1"></div>
+           <div className="flex items-center gap-4 mb-3 animate-in fade-in slide-in-from-left-4 duration-500">
+             <div className="w-12 h-12 bg-white/80 backdrop-blur text-slate-900 rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-blue-900/10 border border-white">
+               <span className="transform hover:scale-110 transition-transform cursor-default">📅</span>
+             </div>
+             <div>
+               <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none">BCF</h1>
+               <div className="flex items-center gap-2 text-slate-500">
+                  <span className="text-[10px] font-bold uppercase tracking-widest bg-slate-200/50 px-2 py-0.5 rounded-md">v1.3</span>
+                  <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                  <span className="text-xs font-medium">Synced Calendar</span>
+               </div>
+             </div>
+             <div className="h-10 w-[1px] bg-slate-200 mx-2"></div>
              <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-700 tracking-tight">{formattedTitle}</h2>
            </div>
            
-           <div className="flex flex-wrap items-center gap-4">
-              <div className="flex bg-white/60 backdrop-blur rounded-xl p-1 shadow-sm border border-white/60">
-                <button onClick={() => setViewMode('day')} className={`px-5 py-2 text-xs font-extrabold rounded-lg transition-all ${viewMode === 'day' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:bg-white/40'}`}>DAY</button>
-                <button onClick={() => setViewMode('month')} className={`px-5 py-2 text-xs font-extrabold rounded-lg transition-all ${viewMode === 'month' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:bg-white/40'}`}>MONTH</button>
+           <div className="flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-left-4 duration-700 delay-100">
+              <div className="flex bg-slate-100/50 backdrop-blur rounded-xl p-1 shadow-inner border border-white/40">
+                <button onClick={() => setViewMode('day')} className={`px-5 py-2 text-xs font-extrabold rounded-lg transition-all duration-300 ${viewMode === 'day' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>DAY</button>
+                <button onClick={() => setViewMode('month')} className={`px-5 py-2 text-xs font-extrabold rounded-lg transition-all duration-300 ${viewMode === 'month' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>MONTH</button>
               </div>
-              <p className="text-sm font-bold text-slate-500 flex items-center gap-2">
-                {viewMode === 'day' ? currentDate.toLocaleDateString('en-US', { weekday: 'long' }) : 'Monthly Overview'}
-                {dateKey === new Date().toISOString().split('T')[0] && <span className="text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">Today</span>}
-              </p>
+              
+              {dateKey === new Date().toISOString().split('T')[0] && (
+                 <span className="flex items-center gap-1.5 text-blue-600 bg-blue-50/80 backdrop-blur border border-blue-100 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wide shadow-sm">
+                   <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                   Today
+                 </span>
+              )}
            </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right-4 duration-500">
            <button 
              onClick={handleGoogleAuth}
-             className={`flex items-center gap-2 px-5 py-3 rounded-full shadow-sm font-bold border active:scale-95 transition-all ${
+             disabled={isSyncing}
+             className={`flex items-center gap-2 px-5 py-3 rounded-full shadow-lg shadow-slate-200/50 font-bold border active:scale-95 transition-all ${
                googleConnected 
-                ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' 
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-             } ${isSyncing ? 'animate-pulse' : ''}`}
+                ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' 
+                : 'bg-white text-slate-700 border-white hover:bg-slate-50 hover:text-blue-600'
+             }`}
            >
-             {googleConnected ? <LogOut size={18} /> : <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />}
-             <span className="hidden sm:inline">{googleConnected ? 'Disconnect' : 'Sync Google'}</span>
+             {isSyncing ? (
+                <RefreshCw size={18} className="animate-spin text-blue-600" />
+             ) : (
+                googleConnected ? <LogOut size={18} /> : <span className="text-xl">G</span>
+             )}
+             <span className="hidden sm:inline text-sm">{googleConnected ? 'Disconnect' : 'Sync Google'}</span>
            </button>
 
-           <div className="flex bg-white rounded-full shadow-lg border border-slate-200/60 p-1">
-             <button onClick={handlePrev} className="p-3 hover:bg-slate-100 rounded-full transition-colors text-slate-600"><ChevronLeft size={22} /></button>
+           <div className="flex bg-white/80 backdrop-blur rounded-full shadow-lg border border-white p-1">
+             <button onClick={handlePrev} className="p-3 hover:bg-slate-100 rounded-full transition-colors text-slate-600 active:scale-90"><ChevronLeft size={22} /></button>
              <button onClick={handleToday} className="px-6 py-2 text-xs font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 rounded-full transition-colors border-x border-slate-100">Today</button>
-             <button onClick={handleNext} className="p-3 hover:bg-slate-100 rounded-full transition-colors text-slate-600"><ChevronRight size={22} /></button>
+             <button onClick={handleNext} className="p-3 hover:bg-slate-100 rounded-full transition-colors text-slate-600 active:scale-90"><ChevronRight size={22} /></button>
            </div>
            
            <button 
             onClick={() => setShowAddModal(true)}
-            className="w-14 h-14 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-transform hover:bg-blue-600"
+            className="w-14 h-14 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-transform hover:bg-blue-600 active:scale-90"
            >
              <Plus size={28} />
            </button>
