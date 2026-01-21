@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserState, MeetEvent, StandaloneReminder } from '../types';
-import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Check, RefreshCw, LogOut, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Check, RefreshCw, LogOut, Video, ExternalLink } from 'lucide-react';
 import EventModal from './EventModal';
 import AddEventModal from './AddEventModal';
 import DeveloperTools from './DeveloperTools';
@@ -11,10 +11,9 @@ interface CalendarViewProps {
   schedule: MeetEvent[];
   reminders: StandaloneReminder[];
   onAddEvent: (event: MeetEvent) => void;
-  onImportEvents: (events: MeetEvent[]) => void; // New Prop for Bulk Import
+  onImportEvents: (events: MeetEvent[]) => void;
   onAddReminder: (reminder: StandaloneReminder) => void;
   onToggleReminder: (id: string) => void;
-  // Trigger a reload of data from parent
   onRefreshData: () => void; 
 }
 
@@ -38,9 +37,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const [googleConnected, setGoogleConnected] = useState(false);
 
   useEffect(() => {
-    GoogleCalendarService.initialize().then(() => {
-        // We could check token presence here but GAPI doesn't expose it easily without a call
-    }).catch(() => {});
+    GoogleCalendarService.initialize().catch(() => {});
   }, []);
 
   const handlePrev = () => {
@@ -73,12 +70,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       if(auth) {
         setGoogleConnected(true);
         const events = await GoogleCalendarService.fetchEvents();
-        // Use Bulk Import to prevent Crash
         onImportEvents(events); 
-        // Force refresh to show new events
         setTimeout(() => onRefreshData(), 100); 
       } else {
-        alert("Sync failed. Check browser console for 'redirect_uri_mismatch' or popup blocker.");
+        alert("Sync failed. Check browser console.");
       }
     } catch(e) { 
         console.error(e);
@@ -96,42 +91,81 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const END_HOUR = 23; 
   const TOTAL_HOURS = END_HOUR - START_HOUR;
   const timeSlots = Array.from({ length: TOTAL_HOURS }, (_, i) => i + START_HOUR);
+
+  // Time conversion helper
+  const getMinutes = (timeStr: string) => {
+    const [h, m] = timeStr.split(':').map(Number);
+    return h * 60 + m;
+  };
   
-  // Robust Overlap Calculation
+  // ADVANCED CLUSTERING ALGORITHM
+  // This ensures events never overlap visually by grouping colliding events
   const calculateEventLayout = (events: MeetEvent[]) => {
-    // Sort by start time
+    if (events.length === 0) return [];
+
+    // 1. Sort by start time, then length (longer first)
     const sorted = [...events].sort((a, b) => {
-        if (a.startTime !== b.startTime) return a.startTime.localeCompare(b.startTime);
-        return a.endTime.localeCompare(b.endTime);
+        const diffStart = getMinutes(a.startTime) - getMinutes(b.startTime);
+        if (diffStart !== 0) return diffStart;
+        return getMinutes(b.endTime) - getMinutes(a.endTime);
     });
 
-    const columns: MeetEvent[][] = [];
-    
-    sorted.forEach(event => {
-        let placed = false;
-        for (let i = 0; i < columns.length; i++) {
-            const lastInCol = columns[i][columns[i].length - 1];
-            // If current event starts after the last one in this column ends
-            if (event.startTime >= lastInCol.endTime) {
-                columns[i].push(event);
-                placed = true;
-                break;
+    const clusters: MeetEvent[][] = [];
+    let currentCluster: MeetEvent[] = [];
+    let clusterEnd = -1;
+
+    // 2. Group into clusters
+    sorted.forEach(ev => {
+        const start = getMinutes(ev.startTime);
+        const end = getMinutes(ev.endTime);
+
+        if (currentCluster.length === 0) {
+            currentCluster.push(ev);
+            clusterEnd = end;
+        } else {
+            // If this event starts before the current cluster ends, it belongs to the cluster
+            if (start < clusterEnd) {
+                currentCluster.push(ev);
+                clusterEnd = Math.max(clusterEnd, end);
+            } else {
+                // Close cluster and start new
+                clusters.push(currentCluster);
+                currentCluster = [ev];
+                clusterEnd = end;
             }
         }
-        if (!placed) {
-            columns.push([event]);
-        }
     });
+    if (currentCluster.length > 0) clusters.push(currentCluster);
 
-    // Now flatten and assign widths
     const layoutEvents: any[] = [];
-    const colCount = columns.length;
-    columns.forEach((col, colIndex) => {
-        col.forEach(event => {
-            layoutEvents.push({
-                ...event,
-                width: 100 / colCount,
-                left: (100 / colCount) * colIndex
+
+    // 3. Process each cluster to assign width and left position
+    clusters.forEach(cluster => {
+        // Simple packing for the cluster
+        // We create columns within the cluster
+        const columns: MeetEvent[][] = [];
+        
+        cluster.forEach(ev => {
+            let placed = false;
+            for (let i = 0; i < columns.length; i++) {
+                const lastInCol = columns[i][columns[i].length - 1];
+                if (getMinutes(ev.startTime) >= getMinutes(lastInCol.endTime)) {
+                    columns[i].push(ev);
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) columns.push([ev]);
+        });
+
+        const numCols = columns.length;
+        columns.forEach((col, colIndex) => {
+            col.forEach(ev => {
+                layoutEvents.push({
+                    ...ev,
+                    width: 100 / numCols,
+                    left: (100 / numCols) * colIndex
+                });
             });
         });
     });
@@ -140,23 +174,19 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   const getPositionStyle = (startTime: string, endTime: string) => {
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-
-    const startTotal = (startH * 60) + startM;
-    const endTotal = (endH * 60) + endM;
+    const startTotal = getMinutes(startTime);
+    const endTotal = getMinutes(endTime);
     const dayStart = START_HOUR * 60;
     const totalDayMinutes = TOTAL_HOURS * 60;
 
     const top = ((startTotal - dayStart) / totalDayMinutes) * 100;
-    const height = ((endTotal - startTotal) / totalDayMinutes) * 100;
+    const height = Math.max(((endTotal - startTotal) / totalDayMinutes) * 100, 2.5); // Minimum height
 
     return { top: `${top}%`, height: `${height}%` };
   };
 
   const getReminderTop = (time: string) => {
-    const [h, m] = time.split(':').map(Number);
-    const total = (h * 60) + m;
+    const total = getMinutes(time);
     const dayStart = START_HOUR * 60;
     return ((total - dayStart) / (TOTAL_HOURS * 60)) * 100;
   };
@@ -183,10 +213,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   return (
     <div className="flex flex-col h-full overflow-hidden pb-20 w-full">
       
-      {/* Top Navigation Bar - Enhanced Apple-like Design */}
+      {/* Top Navigation Bar */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between px-2 mb-6 gap-6">
         <div>
-           {/* BCF Branding + Title */}
            <div className="flex items-center gap-4 mb-3 animate-in fade-in slide-in-from-left-4 duration-500">
              <div className="w-12 h-12 bg-white/80 backdrop-blur text-slate-900 rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-blue-900/10 border border-white">
                <span className="transform hover:scale-110 transition-transform cursor-default">📅</span>
@@ -251,7 +280,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
       </div>
 
-      {/* Main Content Area - Full Width */}
+      {/* Main Content Area */}
       <div className="flex-1 glass-card rounded-[32px] overflow-hidden relative border border-white/60 shadow-2xl shadow-blue-900/10 backdrop-blur-3xl w-full">
         
         {/* DAY VIEW */}
@@ -289,38 +318,53 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   if (isBreak) bgClass = "bg-slate-100/80 text-slate-500 border-l-[6px] border-slate-300 border-dashed";
                   if (isWorkshop) bgClass = "bg-purple-50/90 text-purple-900 border-l-[6px] border-purple-500 shadow-lg shadow-purple-900/5";
                   if (isPersonal) bgClass = "bg-emerald-50/90 text-emerald-900 border-l-[6px] border-emerald-500 shadow-lg shadow-emerald-900/5";
-                  // Google events override styling slightly
-                  if (isGoogle) bgClass = "bg-blue-50/90 text-blue-900 border-l-[6px] border-blue-600 shadow-md";
+                  if (isGoogle) bgClass = "bg-blue-50/95 text-blue-900 border-l-[6px] border-blue-600 shadow-md";
 
                   return (
                     <div
                       key={event.eventId}
                       onClick={() => setSelectedEvent(event)}
-                      className={`absolute rounded-xl px-4 py-2 text-xs cursor-pointer hover:scale-[1.02] hover:z-50 transition-all border-y border-r border-slate-200/40 overflow-hidden group flex flex-col justify-start ${bgClass}`}
+                      className={`absolute rounded-xl px-3 py-1.5 text-xs cursor-pointer hover:scale-[1.02] hover:z-50 transition-all border-y border-r border-slate-200/40 overflow-hidden group flex flex-col justify-between ${bgClass}`}
                       style={{ 
                         top: style.top, 
                         height: style.height,
                         left: `${event.left}%`,
                         width: `${event.width}%`,
                         zIndex: event.left > 0 ? 10 : 1,
-                        minHeight: '40px' // Prevent unreadability
                       }}
                     >
-                      <div className="font-extrabold text-sm truncate leading-tight mb-0.5 flex items-center gap-1">
-                          {isGoogle && <span className="text-[8px] bg-blue-200 px-1 rounded text-blue-800">G</span>}
-                          {event.title}
+                      <div className="flex-1 min-h-0">
+                         <div className="font-extrabold text-sm truncate leading-tight mb-0.5 flex items-center gap-1">
+                            {isGoogle && <span className="flex-shrink-0 text-[8px] bg-blue-200 px-1 rounded text-blue-800">G</span>}
+                            <span className="truncate">{event.title}</span>
+                         </div>
+                         {!isBreak && (
+                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 opacity-80 mt-1">
+                              <span className="flex items-center gap-1 font-semibold truncate"><Clock size={10} strokeWidth={3} /> {event.startTime} - {event.endTime}</span>
+                              {event.platform && !event.platform.startsWith('http') && <span className="flex items-center gap-1 font-semibold bg-white/50 px-1.5 rounded-md truncate max-w-full"><MapPin size={10} strokeWidth={3} /> {event.platform}</span>}
+                           </div>
+                         )}
                       </div>
-                      {!isBreak && (
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 opacity-80 mt-1">
-                           <span className="flex items-center gap-1 font-semibold"><Clock size={12} strokeWidth={3} /> {event.startTime} - {event.endTime}</span>
-                           {event.platform && <span className="flex items-center gap-1 font-semibold bg-white/50 px-1.5 rounded-md"><MapPin size={12} strokeWidth={3} /> {event.platform}</span>}
+
+                      {/* Video Link Button (Only if space permits and link exists) */}
+                      {event.meetLink && (
+                        <div className="mt-1 flex-shrink-0">
+                           <a 
+                             href={event.meetLink} 
+                             target="_blank" 
+                             rel="noreferrer"
+                             onClick={(e) => e.stopPropagation()} 
+                             className="inline-flex items-center gap-1 bg-white text-blue-600 px-2 py-1 rounded-lg shadow-sm border border-blue-100 font-bold hover:bg-blue-50 transition-colors w-full justify-center"
+                           >
+                              <Video size={10} /> Join
+                           </a>
                         </div>
                       )}
                     </div>
                   );
                })}
 
-               {/* Independent Reminders on Timeline */}
+               {/* Reminders */}
                {daysReminders.map(reminder => (
                  <div 
                    key={reminder.id}
@@ -336,7 +380,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                     }`}
                    >
                      {!reminder.isCompleted && <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-red-500 rounded-full shadow-md border-2 border-white"></div>}
-
                      <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-colors ${reminder.isCompleted ? 'bg-slate-300 border-transparent' : 'bg-red-50 border-red-200'}`}>
                         {reminder.isCompleted && <Check size={14} className="text-white" strokeWidth={4}/>}
                      </div>
@@ -345,11 +388,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                        <span className="text-[10px] font-bold text-slate-400 mt-1">{reminder.time}</span>
                      </div>
                    </div>
-                   <div className="w-[100vw] h-[2px] bg-red-300/30 absolute top-1/2 right-full -mr-2 pointer-events-none group-hover:bg-red-400/50 transition-colors"></div>
                  </div>
                ))}
 
-               {/* Current Time Indicator */}
+               {/* Current Time Line */}
                {dateKey === new Date().toISOString().split('T')[0] && (
                   <div className="absolute w-full border-t-[2px] border-red-500 z-30 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,0.5)]" style={{ top: `${((new Date().getHours() * 60 + new Date().getMinutes() - (START_HOUR*60)) / (TOTAL_HOURS * 60)) * 100}%` }}>
                     <div className="absolute -left-1.5 -top-2 w-4 h-4 bg-red-500 rounded-full shadow border-2 border-white"></div>
@@ -384,7 +426,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                        }}
                      >
                         <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-blue-600 text-white shadow-md' : 'text-slate-700'}`}>{day}</span>
-                        
                         <div className="flex flex-col gap-1 mt-1 overflow-hidden">
                           {dayEvents.slice(0, 2).map(e => (
                              <div key={e.eventId} className="text-[10px] font-bold px-2 py-1 rounded-md bg-blue-50 text-blue-900 truncate border border-blue-100">
@@ -410,9 +451,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         <AddEventModal 
           onClose={() => setShowAddModal(false)} 
           onAdd={async (e) => { 
-              // Add to Local
               onAddEvent(e); 
-              // Try add to Google
               if(googleConnected) {
                  await GoogleCalendarService.createEvent(e);
               }
@@ -422,7 +461,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         />
       )}
       
-      {/* Dev Tools */}
       <DeveloperTools onReset={onRefreshData} />
     </div>
   );

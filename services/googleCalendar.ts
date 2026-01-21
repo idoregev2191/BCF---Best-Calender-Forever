@@ -124,9 +124,6 @@ export const GoogleCalendarService = {
 
       let allEvents: MeetEvent[] = [];
       
-      // CRITICAL MEMORY FIX:
-      // Reduced window to 1 month back -> 3 months forward. 
-      // This prevents fetching thousands of events and crashing the browser tab.
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - 1);
       
@@ -142,7 +139,7 @@ export const GoogleCalendarService = {
                 'timeMax': endDate.toISOString(),
                 'showDeleted': false,
                 'singleEvents': true,
-                'maxResults': 250, // Reduced from 2000 to 250 to prevent OOM
+                'maxResults': 250, 
                 'orderBy': 'startTime',
             });
 
@@ -164,6 +161,42 @@ export const GoogleCalendarService = {
 
                 const isPrimary = cal.primary;
 
+                // --- LINK EXTRACTION LOGIC ---
+                let videoLink = undefined;
+                
+                // 1. Check Google Meet native data
+                if (ev.conferenceData?.entryPoints) {
+                    const videoEntry = ev.conferenceData.entryPoints.find((e: any) => e.entryPointType === 'video');
+                    if (videoEntry) videoLink = videoEntry.uri;
+                }
+
+                // 2. Scan Description for Zoom/Teams/Meet links using Regex
+                const description = ev.description || '';
+                if (!videoLink && description) {
+                    // Regex to find https links containing zoom, meet, or teams
+                    const urlRegex = /(https?:\/\/[^\s<"]+)/g;
+                    const matches = description.match(urlRegex);
+                    if (matches) {
+                        const found = matches.find((url: string) => 
+                            url.includes('zoom.us') || 
+                            url.includes('meet.google.com') || 
+                            url.includes('teams.microsoft.com')
+                        );
+                        if (found) videoLink = found;
+                    }
+                }
+
+                // 3. Check Location field
+                if (!videoLink && ev.location && (ev.location.includes('http') || ev.location.includes('zoom'))) {
+                     const urlRegex = /(https?:\/\/[^\s]+)/g;
+                     const match = ev.location.match(urlRegex);
+                     if (match) videoLink = match[0];
+                }
+
+                // --- CLEAN DESCRIPTION ---
+                // Remove HTML tags for clean display in our UI
+                const cleanNotes = description.replace(/<[^>]*>?/gm, '').trim();
+
                 return {
                     eventId: ev.id,
                     googleEventId: ev.id,
@@ -173,8 +206,8 @@ export const GoogleCalendarService = {
                     startTime: timeStr === 'Invalid Date' ? '00:00' : timeStr,
                     endTime: endTimeStr === 'Invalid Date' ? '23:59' : endTimeStr,
                     platform: isPrimary ? (ev.location || 'Google Calendar') : `${cal.summary}`, 
-                    meetLink: ev.htmlLink,
-                    notes: ev.description || '',
+                    meetLink: videoLink, // Only put the VIDEO link here, not the event link
+                    notes: cleanNotes,
                     reminders: []
                 } as MeetEvent;
             });
