@@ -49,6 +49,14 @@ const App: React.FC = () => {
     setSchedule(prev => [...prev, newEvent]);
   };
 
+  // NEW: Handle Bulk Import from Google
+  const handleImportEvents = (events: MeetEvent[]) => {
+    StorageService.importEvents(events);
+    // State update happens via handleDataLoad usually, or we can push directly
+    // Ideally we reload full state to dedupe in memory
+    setSchedule(prev => [...prev, ...events]); 
+  };
+
   const handleAddReminder = (newReminder: StandaloneReminder) => {
     StorageService.addReminder(newReminder);
     setReminders(prev => [...prev, newReminder]);
@@ -76,6 +84,7 @@ const App: React.FC = () => {
             schedule={schedule}
             reminders={reminders}
             onAddEvent={handleAddEvent}
+            onImportEvents={handleImportEvents}
             onAddReminder={handleAddReminder}
             onToggleReminder={handleToggleReminder}
             onRefreshData={() => handleDataLoad(user)}

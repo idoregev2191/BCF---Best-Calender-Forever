@@ -57,6 +57,21 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.CUSTOM_EVENTS, JSON.stringify(customEvents));
   },
 
+  // NEW: Bulk import to prevent crash
+  importEvents: (events: MeetEvent[]) => {
+    const customEventsRaw = localStorage.getItem(STORAGE_KEYS.CUSTOM_EVENTS);
+    const customEvents: MeetEvent[] = customEventsRaw ? JSON.parse(customEventsRaw) : [];
+    
+    // Create a Set of existing IDs to prevent duplicates
+    const existingIds = new Set(customEvents.map(e => e.eventId));
+    const newUniqueEvents = events.filter(e => !existingIds.has(e.eventId));
+
+    if (newUniqueEvents.length > 0) {
+        const updated = [...customEvents, ...newUniqueEvents];
+        localStorage.setItem(STORAGE_KEYS.CUSTOM_EVENTS, JSON.stringify(updated));
+    }
+  },
+
   // Reminder Management
   getReminders: (): StandaloneReminder[] => {
     const data = localStorage.getItem(STORAGE_KEYS.REMINDERS);

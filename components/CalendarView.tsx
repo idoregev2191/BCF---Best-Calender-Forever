@@ -11,6 +11,7 @@ interface CalendarViewProps {
   schedule: MeetEvent[];
   reminders: StandaloneReminder[];
   onAddEvent: (event: MeetEvent) => void;
+  onImportEvents: (events: MeetEvent[]) => void; // New Prop for Bulk Import
   onAddReminder: (reminder: StandaloneReminder) => void;
   onToggleReminder: (id: string) => void;
   // Trigger a reload of data from parent
@@ -24,6 +25,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   schedule, 
   reminders,
   onAddEvent, 
+  onImportEvents,
   onAddReminder,
   onToggleReminder,
   onRefreshData
@@ -71,9 +73,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       if(auth) {
         setGoogleConnected(true);
         const events = await GoogleCalendarService.fetchEvents();
-        events.forEach(onAddEvent);
+        // Use Bulk Import to prevent Crash
+        onImportEvents(events); 
+        // Force refresh to show new events
+        setTimeout(() => onRefreshData(), 100); 
       } else {
-        alert("Sync failed. If you see 'redirect_uri_mismatch', your current URL is not whitelisted in the Google Cloud Console.");
+        alert("Sync failed. Check browser console for 'redirect_uri_mismatch' or popup blocker.");
       }
     } catch(e) { 
         console.error(e);

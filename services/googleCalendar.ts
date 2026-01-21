@@ -89,8 +89,6 @@ export const GoogleCalendarService = {
       resolveAuthPromise = resolve;
 
       // Trigger the popup
-      // NOTE: If you get 'redirect_uri_mismatch', ensure your origin (e.g. localhost:5173) 
-      // is added to 'Authorized Javascript Origins' in Google Cloud Console.
       tokenClient.requestAccessToken({ prompt: 'consent' });
     });
   },
@@ -110,12 +108,13 @@ export const GoogleCalendarService = {
     try {
       let calendars = [];
 
-      // 1. Try to Fetch List of ALL Calendars
+      // 1. Try to Fetch List of Calendars
       try {
         const calendarListResponse = await window.gapi.client.calendar.calendarList.list();
-        calendars = calendarListResponse.result.items || [];
+        // Limit to first 10 calendars to avoid memory crash if user has too many subscribed calendars
+        calendars = (calendarListResponse.result.items || []).slice(0, 10); 
       } catch (listErr) {
-        console.warn("Could not list all calendars, defaulting to Primary.", listErr);
+        console.warn("Could not list calendars, defaulting to Primary.", listErr);
         calendars = [{ id: 'primary', summary: 'Primary', primary: true }];
       }
 
@@ -125,19 +124,25 @@ export const GoogleCalendarService = {
 
       let allEvents: MeetEvent[] = [];
       
-      // Calculate 1 year ago from today
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      // CRITICAL MEMORY FIX:
+      // Reduced window to 1 month back -> 3 months forward. 
+      // This prevents fetching thousands of events and crashing the browser tab.
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 1);
+      
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + 3);
 
       // 2. Iterate and fetch events for each calendar
       const promises = calendars.map(async (cal: any) => {
         try {
             const response = await window.gapi.client.calendar.events.list({
                 'calendarId': cal.id,
-                'timeMin': oneYearAgo.toISOString(), 
+                'timeMin': startDate.toISOString(),
+                'timeMax': endDate.toISOString(),
                 'showDeleted': false,
                 'singleEvents': true,
-                'maxResults': 2000, 
+                'maxResults': 250, // Reduced from 2000 to 250 to prevent OOM
                 'orderBy': 'startTime',
             });
 
