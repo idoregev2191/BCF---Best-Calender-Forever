@@ -1,7 +1,6 @@
 import { MeetEvent } from '../types';
 import { GOOGLE_CONFIG } from '../config';
 
-// Declare types for window globals provided by Google scripts
 declare global {
   interface Window {
     gapi: any;
@@ -12,15 +11,12 @@ declare global {
 let tokenClient: any;
 let gapiInited = false;
 let gisInited = false;
+let accessToken: string | null = null;
 
 export const GoogleCalendarService = {
   
-  /**
-   * Initialize the Google API Client
-   */
   initialize: async () => {
     return new Promise<void>((resolve, reject) => {
-      // Load GAPI
       if (window.gapi) {
         window.gapi.load('client', async () => {
           try {
@@ -32,17 +28,15 @@ export const GoogleCalendarService = {
             maybeResolve();
           } catch (err) {
             console.error("Error initializing GAPI client", err);
-            // Don't reject loudly, just log
           }
         });
       }
 
-      // Load GIS (Identity Services)
       if (window.google) {
         tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: GOOGLE_CONFIG.clientId,
           scope: GOOGLE_CONFIG.scope,
-          callback: '', // defined at request time
+          callback: '', 
         });
         gisInited = true;
         maybeResolve();
@@ -56,11 +50,7 @@ export const GoogleCalendarService = {
     });
   },
 
-  /**
-   * Trigger the popup to ask user for permission
-   */
   authenticate: async (): Promise<boolean> => {
-    // Ensure initialized
     if (!tokenClient) {
         try {
             await GoogleCalendarService.initialize();
@@ -77,6 +67,7 @@ export const GoogleCalendarService = {
           console.error(resp);
           resolve(false);
         }
+        accessToken = resp.access_token;
         resolve(true);
       };
 
@@ -88,19 +79,29 @@ export const GoogleCalendarService = {
     });
   },
 
-  /**
-   * Fetch real events from the user's primary calendar
-   */
+  signOut: () => {
+    const token = window.gapi.client.getToken();
+    if (token !== null) {
+      window.google.accounts.oauth2.revoke(token.access_token, () => {
+        window.gapi.client.setToken('');
+        accessToken = null;
+      });
+    }
+  },
+
   fetchEvents: async (): Promise<MeetEvent[]> => {
     if (!gapiInited) return [];
 
     try {
+      // We fetch from primary. Fetching 'all' calendars involves iterating calendarList
+      // which often includes holidays/contacts/birthdays that clutter the view.
+      // Primary is best for a "My Planner" app.
       const response = await window.gapi.client.calendar.events.list({
         'calendarId': 'primary',
         'timeMin': (new Date()).toISOString(),
         'showDeleted': false,
         'singleEvents': true,
-        'maxResults': 20,
+        'maxResults': 50,
         'orderBy': 'startTime',
       });
 
@@ -109,29 +110,26 @@ export const GoogleCalendarService = {
         return [];
       }
 
-      // Map Google Event format to our MeetEvent format
       return events.map((ev: any) => {
         const start = ev.start.dateTime || ev.start.date;
         const end = ev.end.dateTime || ev.end.date;
-        
-        // Parse date/time
         const dateObj = new Date(start);
         const dateStr = dateObj.toISOString().split('T')[0];
         const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-        
         const endObj = new Date(end);
         const endTimeStr = endObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
         return {
           eventId: ev.id,
-          title: ev.summary || 'No Title',
-          type: 'personal', // Google events default to personal
+          googleEventId: ev.id,
+          title: ev.summary || '(No Title)',
+          type: 'personal',
           date: dateStr,
           startTime: timeStr === 'Invalid Date' ? '00:00' : timeStr,
           endTime: endTimeStr === 'Invalid Date' ? '23:59' : endTimeStr,
           platform: ev.location || 'Google Calendar',
-          meetLink: ev.htmlLink,
-          notes: ev.description || '', // Import Description to Notes
+          meetLink: ev.htmlLink, // Use the REAL Google Link
+          notes: ev.description || '', // Real description
           reminders: []
         } as MeetEvent;
       });
@@ -139,6 +137,40 @@ export const GoogleCalendarService = {
     } catch (err) {
       console.error("Error fetching events", err);
       return [];
+    }
+  },
+
+  createEvent: async (event: MeetEvent): Promise<string | null> => {
+    if (!gapiInited) return null;
+    
+    // Convert HH:MM to DateTime
+    const startDateTime = new Date(`${event.date}T${event.startTime}:00`);
+    const endDateTime = new Date(`${event.date}T${event.endTime}:00`);
+
+    const gEvent = {
+      summary: event.title,
+      location: event.platform,
+      description: event.notes,
+      start: {
+        dateTime: startDateTime.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+      end: {
+        dateTime: endDateTime.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+    };
+
+    try {
+      const request = window.gapi.client.calendar.events.insert({
+        'calendarId': 'primary',
+        'resource': gEvent,
+      });
+      const response = await request.execute();
+      return response.id;
+    } catch (e) {
+      console.error("Error creating Google event", e);
+      return null;
     }
   }
 };

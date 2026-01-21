@@ -78,6 +78,7 @@ const App: React.FC = () => {
             onAddEvent={handleAddEvent}
             onAddReminder={handleAddReminder}
             onToggleReminder={handleToggleReminder}
+            onRefreshData={() => handleDataLoad(user)}
           />
         ) : (
           <AssignmentsView 

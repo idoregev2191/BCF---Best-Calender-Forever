@@ -9,6 +9,7 @@ export interface Assignment {
 
 export interface MeetEvent {
   eventId: string;
+  googleEventId?: string; // Track if this is synced with Google
   title: string;
   type: 'lecture' | 'lab' | 'personal' | 'workshop' | 'break' | 'meal';
   date: string; // YYYY-MM-DD

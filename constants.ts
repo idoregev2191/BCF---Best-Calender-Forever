@@ -1,6 +1,6 @@
 import { MeetData, MeetEvent } from './types';
 
-// Helper to get dynamic date string (YYYY-MM-DD)
+// Helper to get dynamic date string
 const getDate = (offsetDays: number = 0) => {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
@@ -11,7 +11,9 @@ const TODAY = getDate(0);
 const TOMORROW = getDate(1);
 const YESTERDAY = getDate(-1);
 
-const generateSchedule = (dateStr: string): MeetEvent[] => [
+// Using the specific Topic/Lab data provided in the prompt
+const generateSchedule = (dateStr: string, variant: number): MeetEvent[] => {
+  const commonEvents: MeetEvent[] = [
     {
       eventId: `BREAKFAST-${dateStr}`,
       title: "Breakfast",
@@ -20,130 +22,114 @@ const generateSchedule = (dateStr: string): MeetEvent[] => [
       startTime: "08:00",
       endTime: "09:00",
       platform: "Dining Hall",
-      notes: "Start the day with energy!"
+      notes: "Morning fuel"
     },
     {
-      eventId: `CS-SESSION-1-${dateStr}`,
-      title: "CS: Python Deep Dive",
-      type: "lecture",
-      date: dateStr,
-      startTime: "09:00",
-      endTime: "10:30",
-      platform: "Turtle Room",
-      assignments: [
-        {
-          assignmentId: `A1-${dateStr}`,
-          title: "Variables Practice",
-          description: "Solve basic problems using variables",
-          dueDate: TOMORROW,
-          submissionLink: "#"
-        }
-      ]
-    },
-    {
-      eventId: `BREAK-1-${dateStr}`,
-      title: "Break",
-      type: "break",
-      date: dateStr,
-      startTime: "10:30",
-      endTime: "10:45",
-      platform: "Lounge",
-      notes: "Grab some water"
-    },
-     {
-      eventId: `ENTREP-SESSION-1-${dateStr}`,
-      title: "Entrep: Market Research",
-      type: "workshop",
-      date: dateStr,
-      startTime: "10:45",
-      endTime: "12:15",
-      platform: "Magic Room",
-      reminders: ["Bring notebook", "Fill microfeedback"]
-    },
-    {
-      eventId: `BREAK-2-${dateStr}`,
-      title: "Break",
-      type: "break",
-      date: dateStr,
-      startTime: "12:15",
-      endTime: "12:45",
-      platform: "Lounge"
-    },
-    {
-      eventId: `DU-SESSION-${dateStr}`,
-      title: "Deeper Understanding",
-      type: "workshop",
-      date: dateStr,
-      startTime: "12:45",
-      endTime: "14:15",
-      platform: "Unicorn Room",
-      reminders: ["Read the article beforehand"]
-    },
-    {
-      eventId: `LUNCH-1-${dateStr}`,
+      eventId: `LUNCH-${dateStr}`,
       title: "Lunch",
       type: "meal",
       date: dateStr,
-      startTime: "14:15",
-      endTime: "15:15",
+      startTime: "13:00",
+      endTime: "14:00",
       platform: "Dining Hall"
-    },
-     {
-      eventId: `CS-SESSION-2-${dateStr}`,
-      title: "CS: Loops & Logic",
-      type: "lab",
-      date: dateStr,
-      startTime: "15:15",
-      endTime: "16:45",
-      platform: "Turtle Room"
-    },
-    {
-      eventId: `LAB-LOUNGE-${dateStr}`,
-      title: "Lab Lounge",
-      type: "lab",
-      date: dateStr,
-      startTime: "17:15",
-      endTime: "18:00",
-      platform: "Target Room"
-    },
-     {
-      eventId: `DINNER-${dateStr}`,
-      title: "Dinner",
-      type: "meal",
-      date: dateStr,
-      startTime: "18:00",
-      endTime: "19:00",
-      platform: "Dining Hall"
-    },
-    {
-      eventId: `COMP-${dateStr}`,
-      title: "Social Activity",
-      type: "workshop",
-      date: dateStr,
-      startTime: "20:00",
-      endTime: "21:15",
-      platform: "Seminar Room"
-    },
-    {
-      eventId: `FREE-TIME-${dateStr}`,
-      title: "Free Time",
-      type: "personal",
-      date: dateStr,
-      startTime: "21:15",
-      endTime: "22:50",
-      notes: "Chill time"
-    },
-     {
-      eventId: `CURFEW-${dateStr}`,
-      title: "Curfew",
-      type: "personal",
-      date: dateStr,
-      startTime: "22:50",
-      endTime: "23:00",
-      notes: "Fill water bottle! Go to room.",
-      reminders: ["Fill water", "Check in"]
     }
-];
+  ];
+
+  if (variant === 1) { // Module 1 Style
+    return [
+      ...commonEvents,
+      {
+        eventId: `LEC-1-${dateStr}`,
+        title: "Intro to YL + AI Protocol",
+        type: "lecture",
+        date: dateStr,
+        startTime: "09:00",
+        endTime: "10:30",
+        platform: "Turtle Room",
+        assignments: [
+          { assignmentId: `LAB-1-${dateStr}`, title: "Intro Lab", description: "Complete the intro exercises", dueDate: dateStr, submissionLink: "https://meet.google.com" }
+        ],
+        notes: "Slides available on Classroom"
+      },
+      {
+        eventId: `BREAK-1-${dateStr}`,
+        title: "Break",
+        type: "break",
+        date: dateStr,
+        startTime: "10:30",
+        endTime: "10:45",
+        platform: "Lounge"
+      },
+      {
+        eventId: `LAB-1-${dateStr}`,
+        title: "Data Types Deep Dive",
+        type: "lab",
+        date: dateStr,
+        startTime: "10:45",
+        endTime: "12:30",
+        platform: "Turtle Room",
+        assignments: [
+             { assignmentId: `ZIP-${dateStr}`, title: "Zip Files Task", description: "Learn how to zip files correctly", dueDate: TOMORROW }
+        ]
+      },
+      {
+        eventId: `CODE-ALONG-${dateStr}`,
+        title: "Code Along: Loops",
+        type: "workshop",
+        date: dateStr,
+        startTime: "14:00",
+        endTime: "15:30",
+        platform: "Unicorn Room",
+        reminders: ["Open IDE", "Download starter code"]
+      }
+    ];
+  } else { // Module 2 Style
+     return [
+      ...commonEvents,
+       {
+        eventId: `LEC-2-${dateStr}`,
+        title: "Dictionaries & Structures",
+        type: "lecture",
+        date: dateStr,
+        startTime: "09:00",
+        endTime: "10:30",
+        platform: "Magic Room",
+        assignments: [
+           { assignmentId: `DICT-${dateStr}`, title: "Dictionary Lab", description: "Map data structures", dueDate: dateStr }
+        ]
+      },
+      {
+        eventId: `BREAK-2-${dateStr}`,
+        title: "Break",
+        type: "break",
+        date: dateStr,
+        startTime: "10:30",
+        endTime: "10:45",
+        platform: "Lounge"
+      },
+      {
+        eventId: `PROJ-${dateStr}`,
+        title: "Group Project: Planning",
+        type: "lab",
+        date: dateStr,
+        startTime: "10:45",
+        endTime: "12:30",
+        platform: "Breakout Rooms",
+        notes: "Work on the planning doc"
+      },
+       {
+        eventId: `UI-CRASH-${dateStr}`,
+        title: "UI Crash Course",
+        type: "workshop",
+        date: dateStr,
+        startTime: "14:00",
+        endTime: "15:30",
+        platform: "Main Hall",
+        reminders: ["Bring Figma login"]
+      }
+     ];
+  }
+};
 
 export const MEET_DATA: MeetData = {
   "cohorts": {
@@ -153,20 +139,9 @@ export const MEET_DATA: MeetData = {
         "GroupA": {
           "groupMentor": "Mentor Name A",
           "schedule": [
-             ...generateSchedule(TODAY),
-             ...generateSchedule(TOMORROW),
-             ...generateSchedule(YESTERDAY),
-             // A few distinct ones for Yesterday to show overdue status
-             {
-               eventId: "OLD-EVENT-1",
-               title: "Missed Lecture",
-               type: "lecture",
-               date: YESTERDAY,
-               startTime: "16:00",
-               endTime: "18:00",
-               platform: "Zoom",
-               assignments: [{ assignmentId: "OVERDUE-1", title: "Past Homework", description: "This is late", dueDate: YESTERDAY }]
-             }
+             ...generateSchedule(TODAY, 1),
+             ...generateSchedule(TOMORROW, 2),
+             ...generateSchedule(YESTERDAY, 1),
           ],
           "generalAssignments": [
             {
@@ -174,12 +149,6 @@ export const MEET_DATA: MeetData = {
               "title": "Weekly Reflection",
               "description": "Reflect on what you learned this week",
               "dueDate": TOMORROW
-            },
-            {
-              "assignmentId": "GA2",
-              "title": "Project Proposal",
-              "description": "Submit your idea for the final project",
-              "dueDate": getDate(3)
             }
           ]
         },
