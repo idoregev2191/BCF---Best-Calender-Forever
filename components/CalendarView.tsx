@@ -413,4 +413,36 @@ const CalendarView: React.FC<CalendarViewProps> = ({ user, schedule, onAddEvent 
                 </div>
               ) : (
                 <div className="text-center py-6">
-                   <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-
+                   <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                     <AlertTriangle size={32} className="text-red-500" />
+                   </div>
+                   <h3 className="text-lg font-bold text-slate-900 mb-2">Sync Failed</h3>
+                   <p className="text-xs text-slate-500 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                     {syncError}
+                   </p>
+                   
+                   {/* DYNAMIC ORIGIN HELPER IN ERROR STATE TOO */}
+                   <div className="mb-6 bg-blue-50 p-3 rounded-xl border border-blue-100 text-left">
+                     <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider mb-1">Your App Origin:</p>
+                     <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-blue-100">
+                       <code className="text-[10px] font-mono text-slate-600 break-all flex-1">{currentOrigin}</code>
+                       <button onClick={() => navigator.clipboard.writeText(currentOrigin)} className="text-blue-600 hover:text-blue-800"><Copy size={14}/></button>
+                     </div>
+                   </div>
+
+                   <button 
+                     onClick={() => { setSyncError(null); setIsSyncing(false); }}
+                     className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl"
+                   >
+                     Try Again
+                   </button>
+                </div>
+              )}
+           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CalendarView;
