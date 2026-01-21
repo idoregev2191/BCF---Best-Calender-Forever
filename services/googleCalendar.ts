@@ -93,25 +93,34 @@ export const GoogleCalendarService = {
     if (!gapiInited) return [];
 
     try {
-      // 1. Fetch List of ALL Calendars (Primary + Subscribed + Holidays)
-      const calendarListResponse = await window.gapi.client.calendar.calendarList.list();
-      const calendars = calendarListResponse.result.items;
+      let calendars = [];
 
-      if (!calendars || calendars.length === 0) return [];
+      // 1. Try to Fetch List of ALL Calendars
+      try {
+        const calendarListResponse = await window.gapi.client.calendar.calendarList.list();
+        calendars = calendarListResponse.result.items || [];
+      } catch (listErr) {
+        console.warn("Could not list all calendars (scope issue?), defaulting to Primary only.", listErr);
+        calendars = [{ id: 'primary', summary: 'Primary', primary: true }];
+      }
+
+      if (calendars.length === 0) {
+         calendars = [{ id: 'primary', summary: 'Primary', primary: true }];
+      }
 
       let allEvents: MeetEvent[] = [];
 
       // 2. Iterate and fetch events for each calendar
-      // Using Promise.all to fetch in parallel for speed
       const promises = calendars.map(async (cal: any) => {
         try {
             const response = await window.gapi.client.calendar.events.list({
                 'calendarId': cal.id,
-                // CHANGED: Fetch from Jan 1st 2023 to capture history, not just new Date()
+                // Fetch from Jan 1st 2023 to capture history
                 'timeMin': (new Date('2023-01-01')).toISOString(), 
                 'showDeleted': false,
                 'singleEvents': true,
-                'maxResults': 100, // Per calendar limit
+                // CRITICAL FIX: Increased maxResults to 2500 (API Max) to ensure we don't just get 2023 events and stop.
+                'maxResults': 2500, 
                 'orderBy': 'startTime',
             });
 
@@ -120,27 +129,33 @@ export const GoogleCalendarService = {
             return items.map((ev: any) => {
                 const start = ev.start.dateTime || ev.start.date;
                 const end = ev.end.dateTime || ev.end.date;
+                
+                // Handle missing end time (sometimes happens with all-day events)
                 const dateObj = new Date(start);
                 const dateStr = dateObj.toISOString().split('T')[0];
                 const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                const endObj = new Date(end);
-                const endTimeStr = endObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                
+                let endTimeStr = '23:59';
+                if (end) {
+                    const endObj = new Date(end);
+                    endTimeStr = endObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                }
 
-                // Distinguish calendar source in platform or title if needed
+                // Distinguish calendar source
                 const isPrimary = cal.primary;
 
                 return {
-                eventId: ev.id,
-                googleEventId: ev.id,
-                title: ev.summary || '(No Title)',
-                type: 'personal',
-                date: dateStr,
-                startTime: timeStr === 'Invalid Date' ? '00:00' : timeStr,
-                endTime: endTimeStr === 'Invalid Date' ? '23:59' : endTimeStr,
-                platform: isPrimary ? (ev.location || 'Google Calendar') : `${cal.summary}`, // Show Calendar Name for secondary cals
-                meetLink: ev.htmlLink,
-                notes: ev.description || '',
-                reminders: []
+                    eventId: ev.id,
+                    googleEventId: ev.id,
+                    title: ev.summary || '(No Title)',
+                    type: 'personal',
+                    date: dateStr,
+                    startTime: timeStr === 'Invalid Date' ? '00:00' : timeStr,
+                    endTime: endTimeStr === 'Invalid Date' ? '23:59' : endTimeStr,
+                    platform: isPrimary ? (ev.location || 'Google Calendar') : `${cal.summary}`, // Show Calendar Name
+                    meetLink: ev.htmlLink,
+                    notes: ev.description || '',
+                    reminders: []
                 } as MeetEvent;
             });
         } catch (calErr) {
@@ -156,6 +171,7 @@ export const GoogleCalendarService = {
           allEvents = [...allEvents, ...calEvents];
       });
 
+      console.log(`Fetched ${allEvents.length} events from Google.`);
       return allEvents;
 
     } catch (err) {

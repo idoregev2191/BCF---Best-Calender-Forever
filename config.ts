@@ -4,6 +4,6 @@ export const GOOGLE_CONFIG = {
   clientId: '804039290490-06geshflni0bp724bstnuf8ptl3eb8k4.apps.googleusercontent.com',
   
   discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
-  // Changed scope to 'events' (RW) instead of 'events.readonly'
-  scope: "https://www.googleapis.com/auth/calendar.events",
+  // Changed scope to full 'calendar' access to ensure we can LIST secondary calendars and EDIT them
+  scope: "https://www.googleapis.com/auth/calendar",
 };
