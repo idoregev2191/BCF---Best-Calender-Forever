@@ -50,7 +50,8 @@ const DeveloperTools: React.FC<DeveloperToolsProps> = ({ onReset }) => {
              </button>
           </div>
           <div className="mt-4 pt-2 border-t border-slate-700 text-[10px] text-slate-500 text-center">
-            Build: v1.2.0 (Glass)
+             {/* REMINDER: ALWAYS UPDATE VERSION NUMBER WHEN CHANGING VERSIONS */}
+            Build: v1.3.0 (Expansive)
           </div>
         </div>
       )}
