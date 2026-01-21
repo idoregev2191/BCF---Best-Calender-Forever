@@ -109,18 +109,22 @@ export const GoogleCalendarService = {
       }
 
       let allEvents: MeetEvent[] = [];
+      
+      // Calculate 1 year ago from today to prevent loading decades of history causing a crash
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
       // 2. Iterate and fetch events for each calendar
       const promises = calendars.map(async (cal: any) => {
         try {
             const response = await window.gapi.client.calendar.events.list({
                 'calendarId': cal.id,
-                // Fetch from Jan 1st 2023 to capture history
-                'timeMin': (new Date('2023-01-01')).toISOString(), 
+                // OPTIMIZATION: Fetch from 1 year ago instead of fixed 2023.
+                // This prevents fetching thousands of irrelevant old events that crash the browser memory.
+                'timeMin': oneYearAgo.toISOString(), 
                 'showDeleted': false,
                 'singleEvents': true,
-                // CRITICAL FIX: Increased maxResults to 2500 (API Max) to ensure we don't just get 2023 events and stop.
-                'maxResults': 2500, 
+                'maxResults': 2000, // Reduced slightly to ensure stability
                 'orderBy': 'startTime',
             });
 
