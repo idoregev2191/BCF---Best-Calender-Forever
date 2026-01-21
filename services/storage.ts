@@ -1,11 +1,11 @@
-import { MeetEvent, Assignment, AssignmentStatus, UserState, UserProgress } from '../types';
+import { MeetEvent, Assignment, AssignmentStatus, UserState, UserProgress, StandaloneReminder } from '../types';
 import { MEET_DATA } from '../constants';
 
 const STORAGE_KEYS = {
   USER: 'bcf_user',
   CUSTOM_EVENTS: 'bcf_custom_events',
+  REMINDERS: 'bcf_reminders',
   TASK_STATUS: 'bcf_task_status',
-  GCAL_CONNECTED: 'bcf_gcal_connected'
 };
 
 // --- Core Logic ---
@@ -28,7 +28,6 @@ export const StorageService = {
   // Event Management
   getEvents: (cohort: string, group: string): { schedule: MeetEvent[], generalAssignments: Assignment[] } => {
     // 1. Get Static Data from Constants (The "Backend" Data)
-    // Normalize cohort key logic similar to previous python script
     let normalizedCohort = cohort;
     if (["Y3", "y3"].includes(cohort)) normalizedCohort = "2025";
     if (["Y2", "y2"].includes(cohort)) normalizedCohort = "2026";
@@ -58,6 +57,25 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.CUSTOM_EVENTS, JSON.stringify(customEvents));
   },
 
+  // Reminder Management
+  getReminders: (): StandaloneReminder[] => {
+    const data = localStorage.getItem(STORAGE_KEYS.REMINDERS);
+    return data ? JSON.parse(data) : [];
+  },
+
+  addReminder: (reminder: StandaloneReminder) => {
+    const reminders = StorageService.getReminders();
+    reminders.push(reminder);
+    localStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(reminders));
+  },
+
+  toggleReminder: (id: string) => {
+    const reminders = StorageService.getReminders();
+    const updated = reminders.map(r => r.id === id ? { ...r, isCompleted: !r.isCompleted } : r);
+    localStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updated));
+    return updated;
+  },
+
   // Task Status Management
   getTaskProgress: (): UserProgress => {
     const data = localStorage.getItem(STORAGE_KEYS.TASK_STATUS);
@@ -70,23 +88,4 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.TASK_STATUS, JSON.stringify(updated));
     return updated;
   },
-
-  // Helpers
-  getAllAssignments: (schedule: MeetEvent[], generalAssignments: Assignment[]) => {
-    const allAssignments: { assignment: Assignment, sourceEvent: string }[] = [];
-
-    schedule.forEach(event => {
-      if (event.assignments) {
-        event.assignments.forEach(assignment => {
-          allAssignments.push({ assignment, sourceEvent: event.title });
-        });
-      }
-    });
-
-    generalAssignments.forEach(assignment => {
-      allAssignments.push({ assignment, sourceEvent: "General Task" });
-    });
-
-    return allAssignments;
-  }
 };

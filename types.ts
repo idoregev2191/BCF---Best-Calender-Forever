@@ -4,20 +4,29 @@ export interface Assignment {
   description: string;
   dueDate: string;
   submissionLink?: string;
+  relatedEventIds?: string[];
 }
 
 export interface MeetEvent {
   eventId: string;
   title: string;
-  type: 'lecture' | 'lab' | 'personal' | 'workshop';
-  date: string;
-  startTime: string;
-  endTime: string;
-  platform?: string;
+  type: 'lecture' | 'lab' | 'personal' | 'workshop' | 'break' | 'meal';
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  platform?: string; // Room name or Online platform
   meetLink?: string;
-  reminders?: string[];
+  reminders?: string[]; // Checklist items inside the event
   assignments?: Assignment[];
   notes?: string;
+}
+
+export interface StandaloneReminder {
+  id: string;
+  text: string;
+  date: string;
+  time: string;
+  isCompleted: boolean;
 }
 
 export interface GroupData {
@@ -39,7 +48,6 @@ export interface MeetData {
   cohorts: {
     [key: string]: CohortData;
   };
-  userPersonalEventsTemplate?: MeetEvent;
 }
 
 export interface UserState {
@@ -49,7 +57,6 @@ export interface UserState {
   avatar?: string;
 }
 
-// Assignment Status tracking
 export type AssignmentStatus = 'done' | 'not done' | 'on progress';
 
 export interface UserProgress {

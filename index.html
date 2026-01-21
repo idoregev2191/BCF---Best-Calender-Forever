@@ -7,22 +7,21 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- GOOGLE API SCRIPTS (REQUIRED FOR REAL CALENDAR INTEGRATION) -->
+    <!-- GOOGLE API SCRIPTS -->
     <script src="https://apis.google.com/js/api.js" async defer></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
       body {
-        font-family: 'Inter', sans-serif;
-        background-color: #f8fafc; /* Slate 50 */
-        color: #0f172a; /* Slate 900 */
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background-color: #f0f4f8;
+        color: #1e293b;
         overflow-x: hidden;
         -webkit-tap-highlight-color: transparent;
         -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
       }
       
-      /* New MEET Dynamic Background */
+      /* MEET Dynamic Gradient Background */
       .meet-bg {
         position: fixed;
         top: 0;
@@ -30,28 +29,44 @@
         width: 100vw;
         height: 100vh;
         z-index: -1;
-        background: radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.08) 0%, transparent 50%), 
-                    radial-gradient(circle at 100% 100%, rgba(220, 38, 38, 0.08) 0%, transparent 50%);
-        background-color: #f8fafc;
+        background: 
+          radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.15) 0%, transparent 40%), 
+          radial-gradient(circle at 90% 80%, rgba(220, 38, 38, 0.15) 0%, transparent 40%),
+          radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.8) 0%, rgba(241, 245, 249, 1) 100%);
+      }
+
+      /* Glassmorphism Utilities */
+      .glass-card {
+        background: rgba(255, 255, 255, 0.65);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+      }
+
+      .glass-modal {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(30px);
+        -webkit-backdrop-filter: blur(30px);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
       }
 
       /* Clean Scrollbar */
       ::-webkit-scrollbar {
-        width: 0px;
-        background: transparent;
+        width: 6px;
       }
-      
-      .glass-card {
-        background: rgba(255, 255, 255, 0.85);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 1);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.3); 
+        border-radius: 10px;
       }
       
       /* Animation Utilities */
       .tap-active:active {
-        transform: scale(0.96);
+        transform: scale(0.97);
+        transition: transform 0.1s;
       }
     </style>
   <script type="importmap">
@@ -67,7 +82,6 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- CRITICAL: Entry point for Vite/Vercel to load the React App -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

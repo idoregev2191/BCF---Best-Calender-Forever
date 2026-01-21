@@ -4,7 +4,7 @@ import SignUp from './components/SignUp';
 import CalendarView from './components/CalendarView';
 import AssignmentsView from './components/AssignmentsView';
 import Navbar from './components/Navbar';
-import { UserState, MeetEvent, Assignment, UserProgress, AssignmentStatus } from './types';
+import { UserState, MeetEvent, Assignment, UserProgress, AssignmentStatus, StandaloneReminder } from './types';
 import { StorageService } from './services/storage';
 
 const App: React.FC = () => {
@@ -14,6 +14,7 @@ const App: React.FC = () => {
   // State for data
   const [schedule, setSchedule] = useState<MeetEvent[]>([]);
   const [generalAssignments, setGeneralAssignments] = useState<Assignment[]>([]);
+  const [reminders, setReminders] = useState<StandaloneReminder[]>([]);
   const [taskStatus, setTaskStatus] = useState<UserProgress>({});
 
   // 1. Load User on Mount
@@ -29,6 +30,7 @@ const App: React.FC = () => {
     const { schedule, generalAssignments } = StorageService.getEvents(userData.cohort, userData.group);
     setSchedule(schedule);
     setGeneralAssignments(generalAssignments);
+    setReminders(StorageService.getReminders());
     setTaskStatus(StorageService.getTaskProgress());
   };
 
@@ -44,8 +46,17 @@ const App: React.FC = () => {
 
   const handleAddEvent = (newEvent: MeetEvent) => {
     StorageService.addEvent(newEvent);
-    // Refresh local state by appending to existing
     setSchedule(prev => [...prev, newEvent]);
+  };
+
+  const handleAddReminder = (newReminder: StandaloneReminder) => {
+    StorageService.addReminder(newReminder);
+    setReminders(prev => [...prev, newReminder]);
+  };
+
+  const handleToggleReminder = (id: string) => {
+    const updated = StorageService.toggleReminder(id);
+    setReminders(updated);
   };
 
   if (!user) {
@@ -62,8 +73,11 @@ const App: React.FC = () => {
         {view === 'calendar' ? (
           <CalendarView 
             user={user} 
-            schedule={schedule} 
+            schedule={schedule}
+            reminders={reminders}
             onAddEvent={handleAddEvent}
+            onAddReminder={handleAddReminder}
+            onToggleReminder={handleToggleReminder}
           />
         ) : (
           <AssignmentsView 

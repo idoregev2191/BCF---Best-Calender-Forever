@@ -1,12 +1,149 @@
-import { MeetData } from './types';
+import { MeetData, MeetEvent } from './types';
 
-// Helper to generate dates relative to today for demo purposes
-const today = new Date();
-const formatDate = (offset: number) => {
-  const d = new Date(today);
-  d.setDate(d.getDate() + offset);
+// Helper to get dynamic date string (YYYY-MM-DD)
+const getDate = (offsetDays: number = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
   return d.toISOString().split('T')[0];
 };
+
+const TODAY = getDate(0);
+const TOMORROW = getDate(1);
+const YESTERDAY = getDate(-1);
+
+const generateSchedule = (dateStr: string): MeetEvent[] => [
+    {
+      eventId: `BREAKFAST-${dateStr}`,
+      title: "Breakfast",
+      type: "meal",
+      date: dateStr,
+      startTime: "08:00",
+      endTime: "09:00",
+      platform: "Dining Hall",
+      notes: "Start the day with energy!"
+    },
+    {
+      eventId: `CS-SESSION-1-${dateStr}`,
+      title: "CS: Python Deep Dive",
+      type: "lecture",
+      date: dateStr,
+      startTime: "09:00",
+      endTime: "10:30",
+      platform: "Turtle Room",
+      assignments: [
+        {
+          assignmentId: `A1-${dateStr}`,
+          title: "Variables Practice",
+          description: "Solve basic problems using variables",
+          dueDate: TOMORROW,
+          submissionLink: "#"
+        }
+      ]
+    },
+    {
+      eventId: `BREAK-1-${dateStr}`,
+      title: "Break",
+      type: "break",
+      date: dateStr,
+      startTime: "10:30",
+      endTime: "10:45",
+      platform: "Lounge",
+      notes: "Grab some water"
+    },
+     {
+      eventId: `ENTREP-SESSION-1-${dateStr}`,
+      title: "Entrep: Market Research",
+      type: "workshop",
+      date: dateStr,
+      startTime: "10:45",
+      endTime: "12:15",
+      platform: "Magic Room",
+      reminders: ["Bring notebook", "Fill microfeedback"]
+    },
+    {
+      eventId: `BREAK-2-${dateStr}`,
+      title: "Break",
+      type: "break",
+      date: dateStr,
+      startTime: "12:15",
+      endTime: "12:45",
+      platform: "Lounge"
+    },
+    {
+      eventId: `DU-SESSION-${dateStr}`,
+      title: "Deeper Understanding",
+      type: "workshop",
+      date: dateStr,
+      startTime: "12:45",
+      endTime: "14:15",
+      platform: "Unicorn Room",
+      reminders: ["Read the article beforehand"]
+    },
+    {
+      eventId: `LUNCH-1-${dateStr}`,
+      title: "Lunch",
+      type: "meal",
+      date: dateStr,
+      startTime: "14:15",
+      endTime: "15:15",
+      platform: "Dining Hall"
+    },
+     {
+      eventId: `CS-SESSION-2-${dateStr}`,
+      title: "CS: Loops & Logic",
+      type: "lab",
+      date: dateStr,
+      startTime: "15:15",
+      endTime: "16:45",
+      platform: "Turtle Room"
+    },
+    {
+      eventId: `LAB-LOUNGE-${dateStr}`,
+      title: "Lab Lounge",
+      type: "lab",
+      date: dateStr,
+      startTime: "17:15",
+      endTime: "18:00",
+      platform: "Target Room"
+    },
+     {
+      eventId: `DINNER-${dateStr}`,
+      title: "Dinner",
+      type: "meal",
+      date: dateStr,
+      startTime: "18:00",
+      endTime: "19:00",
+      platform: "Dining Hall"
+    },
+    {
+      eventId: `COMP-${dateStr}`,
+      title: "Social Activity",
+      type: "workshop",
+      date: dateStr,
+      startTime: "20:00",
+      endTime: "21:15",
+      platform: "Seminar Room"
+    },
+    {
+      eventId: `FREE-TIME-${dateStr}`,
+      title: "Free Time",
+      type: "personal",
+      date: dateStr,
+      startTime: "21:15",
+      endTime: "22:50",
+      notes: "Chill time"
+    },
+     {
+      eventId: `CURFEW-${dateStr}`,
+      title: "Curfew",
+      type: "personal",
+      date: dateStr,
+      startTime: "22:50",
+      endTime: "23:00",
+      notes: "Fill water bottle! Go to room.",
+      reminders: ["Fill water", "Check in"]
+    }
+];
 
 export const MEET_DATA: MeetData = {
   "cohorts": {
@@ -14,231 +151,46 @@ export const MEET_DATA: MeetData = {
       "description": "Computer Science Cohort 2025",
       "groups": {
         "GroupA": {
-          "groupMentor": "Alex Mentor",
+          "groupMentor": "Mentor Name A",
           "schedule": [
-            // --- DAY 0 (Today) ---
-            {
-              "eventId": "CS101-LEC-1",
-              "title": "Intro to Python Logic",
-              "type": "lecture",
-              "date": formatDate(0),
-              "startTime": "09:00",
-              "endTime": "10:30",
-              "platform": "Google Meet",
-              "meetLink": "https://meet.google.com/abc-defg-hij",
-              "reminders": ["Download VS Code", "Check Python version"],
-              "assignments": [
-                 {
-                  "assignmentId": "A1",
-                  "title": "Setup Environment",
-                  "description": "Install Python 3.9+ and VS Code extensions.",
-                  "dueDate": formatDate(1),
-                  "submissionLink": "#"
-                 }
-              ]
-            },
-            {
-              "eventId": "CS101-WS-1",
-              "title": "Team Building Workshop",
-              "type": "workshop",
-              "date": formatDate(0),
-              "startTime": "11:00",
-              "endTime": "12:30",
-              "platform": "Zoom",
-              "notes": "Bring an interesting fact about yourself."
-            },
-            {
-              "eventId": "LUNCH-1",
-              "title": "Lunch Break",
-              "type": "personal",
-              "date": formatDate(0),
-              "startTime": "12:30",
-              "endTime": "13:30",
-              "platform": "In Person",
-              "notes": "Cafeteria menu: Pizza"
-            },
-            {
-              "eventId": "CS101-LAB-1",
-              "title": "Variables & Types Lab",
-              "type": "lab",
-              "date": formatDate(0),
-              "startTime": "13:30",
-              "endTime": "15:30",
-              "platform": "Discord",
-              "reminders": ["Submit initial commit"],
-              "assignments": [
-                {
-                  "assignmentId": "LAB1",
-                  "title": "Data Types Quiz",
-                  "description": "Complete the moodle quiz on integers and strings.",
-                  "dueDate": formatDate(0),
-                  "submissionLink": "#"
-                }
-              ]
-            },
-            
-            // --- DAY 1 ---
-            {
-              "eventId": "CS101-LEC-2",
-              "title": "Control Flow: If/Else",
-              "type": "lecture",
-              "date": formatDate(1),
-              "startTime": "09:00",
-              "endTime": "10:30",
-              "platform": "Google Meet",
-              "reminders": ["Review yesterday's notes"]
-            },
-            {
-              "eventId": "CS101-MENTOR",
-              "title": "Mentor 1:1 Session",
-              "type": "personal",
-              "date": formatDate(1),
-              "startTime": "14:00",
-              "endTime": "14:30",
-              "platform": "In Person",
-              "notes": "Discuss project ideas with Alex"
-            },
-            {
-              "eventId": "NETWORKING",
-              "title": "Alumni Networking",
-              "type": "workshop",
-              "date": formatDate(1),
-              "startTime": "16:00",
-              "endTime": "18:00",
-              "platform": "Zoom",
-              "notes": "Prepare elevator pitch"
-            },
-
-            // --- DAY 2 ---
-            {
-              "eventId": "CS101-LEC-3",
-              "title": "Loops & Iterations",
-              "type": "lecture",
-              "date": formatDate(2),
-              "startTime": "09:00",
-              "endTime": "10:30",
-              "platform": "Google Meet",
-              "assignments": [
-                {
-                  "assignmentId": "A2",
-                  "title": "Fibonacci Generator",
-                  "description": "Write a script to generate N Fibonacci numbers.",
-                  "dueDate": formatDate(4),
-                  "submissionLink": "#"
-                }
-              ]
-            },
-            {
-              "eventId": "CS101-LAB-3",
-              "title": "Looping Lab",
-              "type": "lab",
-              "date": formatDate(2),
-              "startTime": "11:00",
-              "endTime": "13:00",
-              "platform": "Discord"
-            },
-
-            // --- DAY 3 ---
-            {
-              "eventId": "CS101-GUEST",
-              "title": "Guest Speaker: AI Ethics",
-              "type": "workshop",
-              "date": formatDate(3),
-              "startTime": "16:00",
-              "endTime": "17:30",
-              "platform": "Zoom",
-              "reminders": ["Prepare 1 question"]
-            },
+             ...generateSchedule(TODAY),
+             ...generateSchedule(TOMORROW),
+             ...generateSchedule(YESTERDAY),
+             // A few distinct ones for Yesterday to show overdue status
              {
-              "eventId": "CS101-PROJ",
-              "title": "Group Project Kickoff",
-              "type": "workshop",
-              "date": formatDate(3),
-              "startTime": "18:00",
-              "endTime": "19:30",
-              "platform": "In Person",
-              "notes": "Room 204. Don't be late."
-            },
-
-             // --- DAY 4 ---
-             {
-              "eventId": "CS101-CODE-REV",
-              "title": "Code Review Session",
-              "type": "lab",
-              "date": formatDate(4),
-              "startTime": "10:00",
-              "endTime": "12:00",
-              "platform": "Discord",
-              "reminders": ["Push final code"]
-            }
+               eventId: "OLD-EVENT-1",
+               title: "Missed Lecture",
+               type: "lecture",
+               date: YESTERDAY,
+               startTime: "16:00",
+               endTime: "18:00",
+               platform: "Zoom",
+               assignments: [{ assignmentId: "OVERDUE-1", title: "Past Homework", description: "This is late", dueDate: YESTERDAY }]
+             }
           ],
           "generalAssignments": [
             {
               "assignmentId": "GA1",
               "title": "Weekly Reflection",
-              "description": "Reflect on the Python learning curve.",
-              "dueDate": formatDate(5)
+              "description": "Reflect on what you learned this week",
+              "dueDate": TOMORROW
             },
             {
               "assignmentId": "GA2",
-              "title": "Update LinkedIn",
-              "description": "Add MEET program to your education section.",
-              "dueDate": formatDate(7)
+              "title": "Project Proposal",
+              "description": "Submit your idea for the final project",
+              "dueDate": getDate(3)
             }
           ]
         },
         "GroupB": {
-          "groupMentor": "Sarah Mentor",
-          "schedule": [
-             // --- DAY 0 ---
-            {
-              "eventId": "CS101-LEC-1-B",
-              "title": "Intro to Programming",
-              "type": "lecture",
-              "date": formatDate(0),
-              "startTime": "14:00",
-              "endTime": "15:30",
-              "platform": "Google Meet",
-              "reminders": ["Join session", "Fill microfeedback"],
-              "assignments": []
-            },
-            {
-              "eventId": "CS101-LAB-1-B",
-              "title": "First Lab Session",
-              "type": "lab",
-              "date": formatDate(0),
-              "startTime": "16:00",
-              "endTime": "18:00",
-              "platform": "Discord"
-            },
-            // --- DAY 1 ---
-             {
-              "eventId": "CS101-WS-1-B",
-              "title": "Team Dynamic Workshop",
-              "type": "workshop",
-              "date": formatDate(1),
-              "startTime": "10:00",
-              "endTime": "12:00",
-              "platform": "In Person"
-            }
-          ],
+          "groupMentor": "Mentor Name B",
+          "schedule": [],
           "generalAssignments": []
         }
       }
     },
-    "2026": {
-      "description": "CS 2026",
-      "groups": {
-        "GroupA": { "groupMentor": "C", "schedule": [], "generalAssignments": [] },
-        "GroupB": { "groupMentor": "D", "schedule": [], "generalAssignments": [] }
-      }
-    },
-    "2027": {
-      "description": "CS 2027",
-      "groups": {
-        "GroupA": { "groupMentor": "E", "schedule": [], "generalAssignments": [] },
-        "GroupB": { "groupMentor": "F", "schedule": [], "generalAssignments": [] }
-      }
-    }
+    "2026": { "description": "CS Cohort 2026", "groups": { "GroupA": { "groupMentor": "", "schedule": [], "generalAssignments": [] }, "GroupB": { "groupMentor": "", "schedule": [], "generalAssignments": [] } } },
+    "2027": { "description": "CS Cohort 2027", "groups": { "GroupA": { "groupMentor": "", "schedule": [], "generalAssignments": [] }, "GroupB": { "groupMentor": "", "schedule": [], "generalAssignments": [] } } }
   }
 };

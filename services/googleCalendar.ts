@@ -32,11 +32,9 @@ export const GoogleCalendarService = {
             maybeResolve();
           } catch (err) {
             console.error("Error initializing GAPI client", err);
-            reject(err);
+            // Don't reject loudly, just log
           }
         });
-      } else {
-        reject(new Error("Google API script not loaded"));
       }
 
       // Load GIS (Identity Services)
@@ -48,8 +46,6 @@ export const GoogleCalendarService = {
         });
         gisInited = true;
         maybeResolve();
-      } else {
-         reject(new Error("Google Identity script not loaded"));
       }
 
       function maybeResolve() {
@@ -65,14 +61,17 @@ export const GoogleCalendarService = {
    */
   authenticate: async (): Promise<boolean> => {
     // Ensure initialized
-    if (!tokenClient) await GoogleCalendarService.initialize();
-
-    if (GOOGLE_CONFIG.apiKey === 'YOUR_REAL_GOOGLE_API_KEY_HERE') {
-      alert("Developers: You must add your API Key and Client ID in config.ts for Google Integration to work!");
-      return false;
+    if (!tokenClient) {
+        try {
+            await GoogleCalendarService.initialize();
+        } catch(e) { 
+            return false; 
+        }
     }
 
     return new Promise((resolve) => {
+      if (!tokenClient) return resolve(false);
+
       tokenClient.callback = async (resp: any) => {
         if (resp.error) {
           console.error(resp);
@@ -82,10 +81,8 @@ export const GoogleCalendarService = {
       };
 
       if (window.gapi.client.getToken() === null) {
-        // Prompt the user to select a Google Account and ask for consent to share their data.
         tokenClient.requestAccessToken({ prompt: 'consent' });
       } else {
-        // Skip display of account chooser and consent dialog for an existing session.
         tokenClient.requestAccessToken({ prompt: '' });
       }
     });
@@ -103,7 +100,7 @@ export const GoogleCalendarService = {
         'timeMin': (new Date()).toISOString(),
         'showDeleted': false,
         'singleEvents': true,
-        'maxResults': 15,
+        'maxResults': 20,
         'orderBy': 'startTime',
       });
 
@@ -134,7 +131,7 @@ export const GoogleCalendarService = {
           endTime: endTimeStr === 'Invalid Date' ? '23:59' : endTimeStr,
           platform: ev.location || 'Google Calendar',
           meetLink: ev.htmlLink,
-          notes: ev.description || '',
+          notes: ev.description || '', // Import Description to Notes
           reminders: []
         } as MeetEvent;
       });
