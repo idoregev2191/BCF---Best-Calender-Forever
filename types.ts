@@ -9,17 +9,26 @@ export interface Assignment {
 
 export interface MeetEvent {
   eventId: string;
-  googleEventId?: string; // Track if this is synced with Google
+  googleEventId?: string; 
+  calendarId?: string; // To know which calendar it belongs to
   title: string;
   type: 'lecture' | 'lab' | 'personal' | 'workshop' | 'break' | 'meal';
   date: string; // YYYY-MM-DD
   startTime: string; // HH:MM
   endTime: string; // HH:MM
-  platform?: string; // Room name or Online platform
+  platform?: string; 
   meetLink?: string;
-  reminders?: string[]; // Checklist items inside the event
+  reminders?: string[]; 
   assignments?: Assignment[];
   notes?: string;
+  color?: string; // For Google Calendar colors
+}
+
+export interface GoogleCalendarInfo {
+  id: string;
+  summary: string;
+  backgroundColor?: string;
+  selected: boolean;
 }
 
 export interface StandaloneReminder {
@@ -62,4 +71,25 @@ export type AssignmentStatus = 'done' | 'not done' | 'on progress';
 
 export interface UserProgress {
   [assignmentId: string]: AssignmentStatus;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
+export interface MicrofeedbackData {
+  eventId: string;
+  fullName?: string;
+  nationality: 'Israeli' | 'Palestinian' | '';
+  gender: 'Male' | 'Female' | 'Other' | '';
+  enjoyability: number; // 1-5
+  difficulty: number; // 1-5
+  zone: 'Comfort' | 'Stretch' | 'Panic' | ''; 
+  neededHelp: 'Yes' | 'No' | '';
+  howGotHelp?: string;
+  prideProject: 'Very Proud' | 'Proud' | 'Neutral' | 'Not Proud' | 'Not Proud at all' | '';
+  prideCS: 'Very Proud' | 'Proud' | 'Neutral' | 'Not Proud' | 'Not Proud at all' | '';
+  comments?: string;
+  submittedAt: string;
 }

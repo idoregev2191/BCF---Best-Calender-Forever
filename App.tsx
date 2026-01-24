@@ -10,6 +10,8 @@ import { StorageService } from './services/storage';
 const App: React.FC = () => {
   const [user, setUser] = useState<UserState | null>(null);
   const [view, setView] = useState<'calendar' | 'assignments'>('calendar');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [isTransitioning, setIsTransitioning] = useState(false);
   
   // State for data
   const [schedule, setSchedule] = useState<MeetEvent[]>([]);
@@ -46,25 +48,42 @@ const App: React.FC = () => {
 
   const handleAddEvent = (newEvent: MeetEvent) => {
     StorageService.addEvent(newEvent);
-    setSchedule(prev => [...prev, newEvent]);
+    // Refresh to ensure overrides work if using add
+    handleRefreshData();
   };
 
-  // NEW: Handle Bulk Import from Google
+  // Handle Event Update (Demo Override)
+  const handleUpdateEvent = (updatedEvent: MeetEvent) => {
+     StorageService.updateEvent(updatedEvent);
+     handleRefreshData();
+  };
+
+  // Handle Event Deletion
+  const handleDeleteEvent = (id: string) => {
+    StorageService.deleteEvent(id);
+    setSchedule(prev => prev.filter(e => e.eventId !== id));
+  };
+
   const handleImportEvents = (events: MeetEvent[]) => {
-    StorageService.importEvents(events);
-    // State update happens via handleDataLoad usually, or we can push directly
-    // Ideally we reload full state to dedupe in memory
-    setSchedule(prev => [...prev, ...events]); 
+      StorageService.importEvents(events);
+      if (user) {
+        const { schedule } = StorageService.getEvents(user.cohort, user.group);
+        setSchedule(schedule);
+      }
   };
 
-  const handleAddReminder = (newReminder: StandaloneReminder) => {
-    StorageService.addReminder(newReminder);
-    setReminders(prev => [...prev, newReminder]);
+  const handleAddReminder = (reminder: StandaloneReminder) => {
+      StorageService.addReminder(reminder);
+      setReminders(prev => [...prev, reminder]);
   };
 
   const handleToggleReminder = (id: string) => {
-    const updated = StorageService.toggleReminder(id);
-    setReminders(updated);
+      const updated = StorageService.toggleReminder(id);
+      setReminders(updated);
+  };
+
+  const handleRefreshData = () => {
+      if (user) handleDataLoad(user);
   };
 
   if (!user) {
@@ -77,22 +96,23 @@ const App: React.FC = () => {
 
   return (
     <Layout>
-      <div className="pb-24 h-full">
+      <div key={view} className="animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out h-full flex flex-col">
         {view === 'calendar' ? (
           <CalendarView 
-            user={user} 
+            user={user}
             schedule={schedule}
             reminders={reminders}
             onAddEvent={handleAddEvent}
             onImportEvents={handleImportEvents}
             onAddReminder={handleAddReminder}
             onToggleReminder={handleToggleReminder}
-            onRefreshData={() => handleDataLoad(user)}
+            onDeleteEvent={handleDeleteEvent}
+            onRefreshData={handleRefreshData}
           />
         ) : (
           <AssignmentsView 
-            user={user} 
-            schedule={schedule} 
+            user={user}
+            schedule={schedule}
             generalAssignments={generalAssignments}
             taskStatus={taskStatus}
             onStatusChange={handleTaskStatusChange}

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { UserState, MeetEvent, StandaloneReminder } from '../types';
-import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Check, RefreshCw, LogOut, Video, ExternalLink } from 'lucide-react';
+import { UserState, MeetEvent, StandaloneReminder, GoogleCalendarInfo } from '../types';
+import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Check, RefreshCw, LogOut, Video, Sparkles, Sun, Moon, Calendar as CalIcon, Settings, X, MoreHorizontal } from 'lucide-react';
 import EventModal from './EventModal';
 import AddEventModal from './AddEventModal';
 import DeveloperTools from './DeveloperTools';
+import AIModal from './AIModal';
+import CalendarSelector from './CalendarSelector';
 import { GoogleCalendarService } from '../services/googleCalendar';
+import { StorageService } from '../services/storage';
 
 interface CalendarViewProps {
   user: UserState;
@@ -14,6 +17,7 @@ interface CalendarViewProps {
   onImportEvents: (events: MeetEvent[]) => void;
   onAddReminder: (reminder: StandaloneReminder) => void;
   onToggleReminder: (id: string) => void;
+  onDeleteEvent: (id: string) => void;
   onRefreshData: () => void; 
 }
 
@@ -27,83 +31,98 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   onImportEvents,
   onAddReminder,
   onToggleReminder,
+  onDeleteEvent,
   onRefreshData
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<MeetEvent | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAI, setShowAI] = useState(false);
+  
+  // Google Sync States
   const [isSyncing, setIsSyncing] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [availableCalendars, setAvailableCalendars] = useState<GoogleCalendarInfo[]>([]);
+  const [showCalSelector, setShowCalSelector] = useState(false);
 
   useEffect(() => {
     GoogleCalendarService.initialize().catch(() => {});
   }, []);
 
+  // --- NAVIGATION ---
   const handlePrev = () => {
     const newDate = new Date(currentDate);
     if (viewMode === 'day') newDate.setDate(currentDate.getDate() - 1);
     else newDate.setMonth(currentDate.getMonth() - 1);
     setCurrentDate(newDate);
   };
-
   const handleNext = () => {
     const newDate = new Date(currentDate);
     if (viewMode === 'day') newDate.setDate(currentDate.getDate() + 1);
     else newDate.setMonth(currentDate.getMonth() + 1);
     setCurrentDate(newDate);
   };
-
   const handleToday = () => setCurrentDate(new Date());
 
-  const handleGoogleAuth = async () => {
+  // --- GOOGLE SYNC LOGIC ---
+  const initGoogleSync = async () => {
     if (googleConnected) {
-      GoogleCalendarService.signOut();
-      setGoogleConnected(false);
-      window.location.reload(); 
+      if(confirm("Disconnect Google Calendar?")) {
+          GoogleCalendarService.signOut();
+          setGoogleConnected(false);
+          window.location.reload();
+      }
       return;
     }
-
     setIsSyncing(true);
-    try {
-      const auth = await GoogleCalendarService.authenticate();
-      if(auth) {
-        setGoogleConnected(true);
-        const events = await GoogleCalendarService.fetchEvents();
-        onImportEvents(events); 
-        setTimeout(() => onRefreshData(), 100); 
-      } else {
-        alert("Sync failed. Check browser console.");
-      }
-    } catch(e) { 
-        console.error(e);
-        alert("An unexpected error occurred during sync.");
+    const auth = await GoogleCalendarService.authenticate();
+    if(auth) {
+        const calendars = await GoogleCalendarService.fetchCalendars();
+        if (calendars.length > 0) {
+            setAvailableCalendars(calendars);
+            setShowCalSelector(true);
+        } else {
+            alert("No calendars found.");
+        }
+    } else {
+        alert("Authentication failed.");
     }
     setIsSyncing(false);
   };
 
+  const finalizeSync = async () => {
+      setShowCalSelector(false);
+      setIsSyncing(true);
+      const selectedCals = availableCalendars.filter(c => c.selected);
+      const events = await GoogleCalendarService.fetchEvents(selectedCals);
+      onImportEvents(events);
+      setGoogleConnected(true);
+      setTimeout(() => onRefreshData(), 100);
+      setIsSyncing(false);
+  };
+
+  const toggleCalendarSelection = (id: string) => {
+      setAvailableCalendars(prev => prev.map(c => c.id === id ? {...c, selected: !c.selected} : c));
+  };
+
+  // --- LAYOUT HELPERS ---
   const formattedTitle = viewMode === 'day' 
-    ? currentDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    ? currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric' })
     : currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  // --- Day View Helpers ---
   const START_HOUR = 7;
   const END_HOUR = 23; 
   const TOTAL_HOURS = END_HOUR - START_HOUR;
   const timeSlots = Array.from({ length: TOTAL_HOURS }, (_, i) => i + START_HOUR);
 
-  // Time conversion helper
   const getMinutes = (timeStr: string) => {
     const [h, m] = timeStr.split(':').map(Number);
     return h * 60 + m;
   };
   
-  // ADVANCED CLUSTERING ALGORITHM
-  // This ensures events never overlap visually by grouping colliding events
   const calculateEventLayout = (events: MeetEvent[]) => {
     if (events.length === 0) return [];
-
-    // 1. Sort by start time, then length (longer first)
     const sorted = [...events].sort((a, b) => {
         const diffStart = getMinutes(a.startTime) - getMinutes(b.startTime);
         if (diffStart !== 0) return diffStart;
@@ -114,7 +133,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     let currentCluster: MeetEvent[] = [];
     let clusterEnd = -1;
 
-    // 2. Group into clusters
     sorted.forEach(ev => {
         const start = getMinutes(ev.startTime);
         const end = getMinutes(ev.endTime);
@@ -123,12 +141,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             currentCluster.push(ev);
             clusterEnd = end;
         } else {
-            // If this event starts before the current cluster ends, it belongs to the cluster
             if (start < clusterEnd) {
                 currentCluster.push(ev);
                 clusterEnd = Math.max(clusterEnd, end);
             } else {
-                // Close cluster and start new
                 clusters.push(currentCluster);
                 currentCluster = [ev];
                 clusterEnd = end;
@@ -138,13 +154,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     if (currentCluster.length > 0) clusters.push(currentCluster);
 
     const layoutEvents: any[] = [];
-
-    // 3. Process each cluster to assign width and left position
     clusters.forEach(cluster => {
-        // Simple packing for the cluster
-        // We create columns within the cluster
         const columns: MeetEvent[][] = [];
-        
         cluster.forEach(ev => {
             let placed = false;
             for (let i = 0; i < columns.length; i++) {
@@ -157,7 +168,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             }
             if (!placed) columns.push([ev]);
         });
-
         const numCols = columns.length;
         columns.forEach((col, colIndex) => {
             col.forEach(ev => {
@@ -169,7 +179,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             });
         });
     });
-
     return layoutEvents;
   };
 
@@ -178,10 +187,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     const endTotal = getMinutes(endTime);
     const dayStart = START_HOUR * 60;
     const totalDayMinutes = TOTAL_HOURS * 60;
-
     const top = ((startTotal - dayStart) / totalDayMinutes) * 100;
-    const height = Math.max(((endTotal - startTotal) / totalDayMinutes) * 100, 2.5); // Minimum height
-
+    const height = Math.max(((endTotal - startTotal) / totalDayMinutes) * 100, 2.5); 
     return { top: `${top}%`, height: `${height}%` };
   };
 
@@ -191,13 +198,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     return ((total - dayStart) / (TOTAL_HOURS * 60)) * 100;
   };
 
-  // Filter events for current day
   const dateKey = currentDate.toISOString().split('T')[0];
   const daysEvents = schedule.filter(e => e.date === dateKey);
   const layoutEvents = calculateEventLayout(daysEvents);
   const daysReminders = reminders.filter(r => r.date === dateKey);
 
-  // --- Month View Helpers ---
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -209,85 +214,79 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const { days: daysInMonth, firstDay: startDayOffset } = getDaysInMonth(currentDate);
   const monthDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: startDayOffset }, (_, i) => i);
+  
+  const getGreeting = () => {
+      const h = new Date().getHours();
+      if (h < 12) return { text: "Good Morning", icon: "☀️" };
+      if (h < 18) return { text: "Good Afternoon", icon: "🌤️" };
+      return { text: "Good Evening", icon: "🌙" };
+  };
+  const greeting = getGreeting();
 
   return (
-    <div className="flex flex-col h-full overflow-hidden pb-20 w-full">
+    <div className="flex flex-col h-full overflow-hidden pb-24 w-full">
       
-      {/* Top Navigation Bar */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between px-2 mb-6 gap-6">
+      {/* --- HEADER --- */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between px-4 mb-6 gap-6">
         <div>
-           <div className="flex items-center gap-4 mb-3 animate-in fade-in slide-in-from-left-4 duration-500">
-             <div className="w-12 h-12 bg-white/80 backdrop-blur text-slate-900 rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-blue-900/10 border border-white">
-               <span className="transform hover:scale-110 transition-transform cursor-default">📅</span>
-             </div>
-             <div>
-               <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none">BCF</h1>
-               <div className="flex items-center gap-2 text-slate-500">
-                  <span className="text-[10px] font-bold uppercase tracking-widest bg-slate-200/50 px-2 py-0.5 rounded-md">v1.3</span>
-                  <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                  <span className="text-xs font-medium">Synced Calendar</span>
-               </div>
-             </div>
-             <div className="h-10 w-[1px] bg-slate-200 mx-2"></div>
-             <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-700 tracking-tight">{formattedTitle}</h2>
+           <div className="flex items-center gap-2 mb-1">
+             <span className="text-xl">{greeting.icon}</span>
+             <span className="text-lg font-bold text-slate-500">{greeting.text}, {user.name.split(' ')[0]}</span>
            </div>
            
-           <div className="flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-left-4 duration-700 delay-100">
-              <div className="flex bg-slate-100/50 backdrop-blur rounded-xl p-1 shadow-inner border border-white/40">
-                <button onClick={() => setViewMode('day')} className={`px-5 py-2 text-xs font-extrabold rounded-lg transition-all duration-300 ${viewMode === 'day' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>DAY</button>
-                <button onClick={() => setViewMode('month')} className={`px-5 py-2 text-xs font-extrabold rounded-lg transition-all duration-300 ${viewMode === 'month' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>MONTH</button>
+           <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-none mb-4">
+             {formattedTitle}
+           </h1>
+
+           <div className="flex items-center gap-3">
+              {/* Date Nav Pills */}
+              <div className="flex bg-white rounded-full p-1 shadow-sm border border-slate-200">
+                <button onClick={handlePrev} className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"><ChevronLeft size={20} /></button>
+                <button onClick={handleToday} className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 rounded-full transition-colors">Today</button>
+                <button onClick={handleNext} className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"><ChevronRight size={20} /></button>
               </div>
-              
-              {dateKey === new Date().toISOString().split('T')[0] && (
-                 <span className="flex items-center gap-1.5 text-blue-600 bg-blue-50/80 backdrop-blur border border-blue-100 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wide shadow-sm">
-                   <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                   Today
-                 </span>
-              )}
+
+              {/* View Toggle */}
+              <div className="flex bg-white rounded-full p-1 shadow-sm border border-slate-200">
+                <button onClick={() => setViewMode('day')} className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-all ${viewMode === 'day' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Day</button>
+                <button onClick={() => setViewMode('month')} className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-all ${viewMode === 'month' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Month</button>
+              </div>
            </div>
         </div>
 
-        <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right-4 duration-500">
+        <div className="flex items-center gap-3">
+           {/* Google Sync */}
            <button 
-             onClick={handleGoogleAuth}
+             onClick={initGoogleSync}
              disabled={isSyncing}
-             className={`flex items-center gap-2 px-5 py-3 rounded-full shadow-lg shadow-slate-200/50 font-bold border active:scale-95 transition-all ${
+             className={`flex items-center gap-2 px-4 py-3 rounded-2xl font-bold border transition-all active:scale-95 ${
                googleConnected 
-                ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' 
-                : 'bg-white text-slate-700 border-white hover:bg-slate-50 hover:text-blue-600'
+                ? 'bg-red-50 text-red-600 border-red-100' 
+                : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:text-blue-600 shadow-sm'
              }`}
            >
-             {isSyncing ? (
-                <RefreshCw size={18} className="animate-spin text-blue-600" />
-             ) : (
-                googleConnected ? <LogOut size={18} /> : <span className="text-xl">G</span>
-             )}
-             <span className="hidden sm:inline text-sm">{googleConnected ? 'Disconnect' : 'Sync Google'}</span>
+             {isSyncing ? <RefreshCw size={18} className="animate-spin" /> : <CalIcon size={18} />}
+             <span className="text-sm font-bold">{googleConnected ? 'Unsync' : 'Sync G-Cal'}</span>
            </button>
-
-           <div className="flex bg-white/80 backdrop-blur rounded-full shadow-lg border border-white p-1">
-             <button onClick={handlePrev} className="p-3 hover:bg-slate-100 rounded-full transition-colors text-slate-600 active:scale-90"><ChevronLeft size={22} /></button>
-             <button onClick={handleToday} className="px-6 py-2 text-xs font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 rounded-full transition-colors border-x border-slate-100">Today</button>
-             <button onClick={handleNext} className="p-3 hover:bg-slate-100 rounded-full transition-colors text-slate-600 active:scale-90"><ChevronRight size={22} /></button>
-           </div>
            
+           {/* Add Button */}
            <button 
             onClick={() => setShowAddModal(true)}
-            className="w-14 h-14 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-transform hover:bg-blue-600 active:scale-90"
+            className="h-12 w-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-lg hover:bg-blue-600 hover:shadow-blue-500/30 transition-all active:scale-95"
            >
-             <Plus size={28} />
+             <Plus size={24} strokeWidth={3} />
            </button>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 glass-card rounded-[32px] overflow-hidden relative border border-white/60 shadow-2xl shadow-blue-900/10 backdrop-blur-3xl w-full">
+      {/* --- GLASS PANEL CONTENT --- */}
+      <div className="flex-1 glass-panel rounded-[32px] overflow-hidden relative w-full">
         
         {/* DAY VIEW */}
         {viewMode === 'day' && (
-          <div className="h-full overflow-y-auto custom-scrollbar relative flex bg-white/40">
+          <div className="h-full overflow-y-auto custom-scrollbar relative flex bg-white/50">
             {/* Time Axis */}
-            <div className="w-20 flex-shrink-0 border-r border-slate-200/40 bg-white/50 text-xs font-bold text-slate-400 py-4 text-center sticky left-0 z-20 backdrop-blur-xl">
+            <div className="w-16 flex-shrink-0 border-r border-slate-100 bg-white/40 text-[11px] font-bold text-slate-400 py-4 text-center sticky left-0 z-20 backdrop-blur-md">
               <div className="h-[1500px] relative"> 
                  {timeSlots.map(hour => (
                    <div key={hour} className="absolute w-full -translate-y-3" style={{ top: `${((hour - START_HOUR) / TOTAL_HOURS) * 100}%` }}>
@@ -299,54 +298,55 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
             {/* Grid & Events */}
             <div className="flex-1 relative h-[1500px] min-w-[340px]">
-               {/* Grid Lines */}
                {timeSlots.map(hour => (
-                 <div key={hour} className="absolute w-full border-t border-slate-300/30" style={{ top: `${((hour - START_HOUR) / TOTAL_HOURS) * 100}%` }} />
+                 <div key={hour} className="absolute w-full border-t border-slate-100" style={{ top: `${((hour - START_HOUR) / TOTAL_HOURS) * 100}%` }} />
                ))}
                
                {/* Events */}
                {layoutEvents.map(event => {
                   const style = getPositionStyle(event.startTime, event.endTime);
-                  const isMeal = event.type === 'meal';
-                  const isBreak = event.type === 'break';
-                  const isWorkshop = event.type === 'workshop';
-                  const isPersonal = event.type === 'personal';
                   const isGoogle = !!event.googleEventId;
                   
-                  let bgClass = "bg-white text-slate-800 border-l-[6px] border-blue-500 shadow-lg shadow-blue-900/5";
-                  if (isMeal) bgClass = "bg-orange-50/90 text-orange-900 border-l-[6px] border-orange-400 shadow-md";
-                  if (isBreak) bgClass = "bg-slate-100/80 text-slate-500 border-l-[6px] border-slate-300 border-dashed";
-                  if (isWorkshop) bgClass = "bg-purple-50/90 text-purple-900 border-l-[6px] border-purple-500 shadow-lg shadow-purple-900/5";
-                  if (isPersonal) bgClass = "bg-emerald-50/90 text-emerald-900 border-l-[6px] border-emerald-500 shadow-lg shadow-emerald-900/5";
-                  if (isGoogle) bgClass = "bg-blue-50/95 text-blue-900 border-l-[6px] border-blue-600 shadow-md";
+                  // Vibrant but Clean Colors
+                  let bgClass = "bg-white border-l-4 border-slate-300 text-slate-700 shadow-sm";
+                  let hoverClass = "hover:shadow-md hover:border-slate-400";
+                  
+                  if (event.type === 'meal') { bgClass = "bg-orange-50 border-l-4 border-orange-400 text-orange-900"; hoverClass="hover:shadow-orange-500/10 hover:bg-orange-100"; }
+                  if (event.type === 'break') { bgClass = "bg-slate-50 border-l-4 border-slate-300 text-slate-500 border-dashed"; hoverClass="hover:bg-slate-100"; }
+                  if (event.type === 'workshop') { bgClass = "bg-pink-50 border-l-4 border-pink-400 text-pink-900"; hoverClass="hover:shadow-pink-500/10 hover:bg-pink-100"; }
+                  if (event.type === 'personal') { bgClass = "bg-emerald-50 border-l-4 border-emerald-500 text-emerald-900"; hoverClass="hover:shadow-emerald-500/10 hover:bg-emerald-100"; }
+                  if (event.type === 'lecture') { bgClass = "bg-blue-50 border-l-4 border-blue-500 text-blue-900"; hoverClass="hover:shadow-blue-500/10 hover:bg-blue-100"; }
+                  if (event.type === 'lab') { bgClass = "bg-purple-50 border-l-4 border-purple-500 text-purple-900"; hoverClass="hover:shadow-purple-500/10 hover:bg-purple-100"; }
+
+                  // Google Override
+                  const customStyle = isGoogle && event.color ? { backgroundColor: event.color + '20', color: event.color, borderLeftColor: event.color } : {};
 
                   return (
                     <div
                       key={event.eventId}
                       onClick={() => setSelectedEvent(event)}
-                      className={`absolute rounded-xl px-3 py-1.5 text-xs cursor-pointer hover:scale-[1.02] hover:z-50 transition-all border-y border-r border-slate-200/40 overflow-hidden group flex flex-col justify-between ${bgClass}`}
+                      className={`absolute rounded-r-xl px-3 py-2 text-xs cursor-pointer transition-all overflow-hidden flex flex-col justify-between ${bgClass} ${hoverClass}`}
                       style={{ 
                         top: style.top, 
                         height: style.height,
                         left: `${event.left}%`,
                         width: `${event.width}%`,
                         zIndex: event.left > 0 ? 10 : 1,
+                        ...customStyle
                       }}
                     >
                       <div className="flex-1 min-h-0">
-                         <div className="font-extrabold text-sm truncate leading-tight mb-0.5 flex items-center gap-1">
-                            {isGoogle && <span className="flex-shrink-0 text-[8px] bg-blue-200 px-1 rounded text-blue-800">G</span>}
-                            <span className="truncate">{event.title}</span>
+                         <div className="font-extrabold text-sm truncate leading-tight mb-0.5 flex items-center gap-1.5">
+                            {isGoogle && <div className="w-1.5 h-1.5 rounded-full bg-current"></div>}
+                            <span className="truncate tracking-tight">{event.title}</span>
                          </div>
-                         {!isBreak && (
+                         {event.type !== 'break' && (
                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 opacity-80 mt-1">
-                              <span className="flex items-center gap-1 font-semibold truncate"><Clock size={10} strokeWidth={3} /> {event.startTime} - {event.endTime}</span>
-                              {event.platform && !event.platform.startsWith('http') && <span className="flex items-center gap-1 font-semibold bg-white/50 px-1.5 rounded-md truncate max-w-full"><MapPin size={10} strokeWidth={3} /> {event.platform}</span>}
+                              <span className="flex items-center gap-1 font-semibold truncate"><Clock size={10} /> {event.startTime} - {event.endTime}</span>
+                              {event.platform && !event.platform.startsWith('http') && <span className="flex items-center gap-1 font-semibold truncate max-w-full"><MapPin size={10} /> {event.platform}</span>}
                            </div>
                          )}
                       </div>
-
-                      {/* Video Link Button (Only if space permits and link exists) */}
                       {event.meetLink && (
                         <div className="mt-1 flex-shrink-0">
                            <a 
@@ -354,7 +354,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                              target="_blank" 
                              rel="noreferrer"
                              onClick={(e) => e.stopPropagation()} 
-                             className="inline-flex items-center gap-1 bg-white text-blue-600 px-2 py-1 rounded-lg shadow-sm border border-blue-100 font-bold hover:bg-blue-50 transition-colors w-full justify-center"
+                             className="inline-flex items-center gap-1 bg-white/80 text-blue-600 px-2 py-1.5 rounded-md shadow-sm font-bold hover:bg-blue-600 hover:text-white transition-all w-full justify-center"
                            >
                               <Video size={10} /> Join
                            </a>
@@ -364,37 +364,33 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   );
                })}
 
-               {/* Reminders */}
+               {/* Reminders Bubble */}
                {daysReminders.map(reminder => (
                  <div 
                    key={reminder.id}
-                   className="absolute left-[65%] z-40 w-56 -translate-y-1/2 group"
+                   className="absolute left-[80%] z-40 w-56 -translate-y-1/2 group"
                    style={{ top: `${getReminderTop(reminder.time)}%` }}
                  >
                    <div 
                     onClick={() => onToggleReminder(reminder.id)}
-                    className={`relative flex items-center gap-3 px-4 py-2.5 rounded-2xl shadow-xl border cursor-pointer transition-all hover:scale-105 ${
+                    className={`relative flex items-center gap-2 px-3 py-2 rounded-xl shadow-md border cursor-pointer transition-all hover:scale-105 bg-white ${
                       reminder.isCompleted 
-                        ? 'bg-slate-100/90 text-slate-400 border-slate-200' 
-                        : 'bg-white text-slate-900 border-red-100 hover:border-red-300'
+                        ? 'opacity-60 border-slate-200' 
+                        : 'border-red-100 hover:border-red-300'
                     }`}
                    >
-                     {!reminder.isCompleted && <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-red-500 rounded-full shadow-md border-2 border-white"></div>}
-                     <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-colors ${reminder.isCompleted ? 'bg-slate-300 border-transparent' : 'bg-red-50 border-red-200'}`}>
-                        {reminder.isCompleted && <Check size={14} className="text-white" strokeWidth={4}/>}
+                     <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors flex-shrink-0 ${reminder.isCompleted ? 'bg-slate-200 border-transparent' : 'bg-red-50 border-red-200'}`}>
+                        {reminder.isCompleted && <Check size={12} className="text-slate-500" strokeWidth={3}/>}
                      </div>
-                     <div className="flex flex-col">
-                       <span className={`text-sm font-bold leading-none ${reminder.isCompleted ? 'line-through' : ''}`}>{reminder.text}</span>
-                       <span className="text-[10px] font-bold text-slate-400 mt-1">{reminder.time}</span>
-                     </div>
+                     <span className={`text-xs font-bold text-slate-800 ${reminder.isCompleted ? 'line-through text-slate-400' : ''}`}>{reminder.text}</span>
                    </div>
                  </div>
                ))}
 
-               {/* Current Time Line */}
+               {/* Time Indicator */}
                {dateKey === new Date().toISOString().split('T')[0] && (
-                  <div className="absolute w-full border-t-[2px] border-red-500 z-30 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,0.5)]" style={{ top: `${((new Date().getHours() * 60 + new Date().getMinutes() - (START_HOUR*60)) / (TOTAL_HOURS * 60)) * 100}%` }}>
-                    <div className="absolute -left-1.5 -top-2 w-4 h-4 bg-red-500 rounded-full shadow border-2 border-white"></div>
+                  <div className="absolute w-full border-t-[2px] border-red-500 z-30 pointer-events-none" style={{ top: `${((new Date().getHours() * 60 + new Date().getMinutes() - (START_HOUR*60)) / (TOTAL_HOURS * 60)) * 100}%` }}>
+                    <div className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-red-500 rounded-full shadow-sm"></div>
                   </div>
                )}
             </div>
@@ -403,14 +399,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
         {/* MONTH VIEW */}
         {viewMode === 'month' && (
-          <div className="h-full p-6 overflow-y-auto bg-white/40">
+          <div className="h-full p-6 overflow-y-auto bg-white/60">
              <div className="grid grid-cols-7 mb-4 text-center">
                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                 <div key={d} className="text-xs font-black text-slate-400 uppercase tracking-widest">{d}</div>
+                 <div key={d} className="text-xs font-bold text-slate-400 uppercase tracking-widest">{d}</div>
                ))}
              </div>
-             <div className="grid grid-cols-7 grid-rows-5 gap-3 h-full min-h-[600px]">
-                {emptyDays.map(d => <div key={`empty-${d}`} className="bg-slate-50/20 rounded-2xl"></div>)}
+             <div className="grid grid-cols-7 auto-rows-fr gap-3 h-full min-h-[600px]">
+                {emptyDays.map(d => <div key={`empty-${d}`}></div>)}
                 {monthDays.map(day => {
                    const dateStr = new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toISOString().split('T')[0];
                    const dayEvents = schedule.filter(e => e.date === dateStr);
@@ -419,22 +415,19 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                    return (
                      <div 
                        key={day} 
-                       className={`relative bg-white/70 p-3 rounded-2xl border border-white/60 shadow-sm hover:shadow-lg hover:scale-[1.03] transition-all cursor-pointer flex flex-col gap-1 ${isToday ? 'ring-2 ring-blue-500 shadow-blue-200' : ''}`}
+                       className={`relative bg-white p-3 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col gap-1 ${isToday ? 'ring-2 ring-blue-500 shadow-blue-100' : ''}`}
                        onClick={() => {
                          setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
                          setViewMode('day');
                        }}
                      >
-                        <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-blue-600 text-white shadow-md' : 'text-slate-700'}`}>{day}</span>
+                        <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{day}</span>
                         <div className="flex flex-col gap-1 mt-1 overflow-hidden">
-                          {dayEvents.slice(0, 2).map(e => (
-                             <div key={e.eventId} className="text-[10px] font-bold px-2 py-1 rounded-md bg-blue-50 text-blue-900 truncate border border-blue-100">
-                               {e.title}
+                          {dayEvents.slice(0, 3).map(e => (
+                             <div key={e.eventId} className="w-full h-1.5 rounded-full bg-blue-100">
+                                <div className={`h-full rounded-full ${e.googleEventId ? 'bg-sky-400' : (e.type === 'lecture' ? 'bg-blue-500' : 'bg-emerald-400')}`}></div>
                              </div>
                           ))}
-                          {dayEvents.length > 2 && (
-                             <div className="text-[10px] font-bold text-slate-400 pl-1 mt-0.5">+{dayEvents.length - 2} more</div>
-                          )}
                         </div>
                      </div>
                    );
@@ -442,24 +435,55 @@ const CalendarView: React.FC<CalendarViewProps> = ({
              </div>
           </div>
         )}
-
       </div>
 
-      {/* Modals */}
-      {selectedEvent && <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
+      {/* FLOATING AI BUTTON - Bottom Right */}
+      <div className="fixed bottom-24 right-6 z-50">
+        <button
+          onClick={() => setShowAI(!showAI)}
+          className={`relative group flex items-center justify-center w-14 h-14 rounded-full shadow-2xl transition-all duration-500 ${showAI ? 'bg-white text-slate-900 rotate-90 scale-90' : 'bg-slate-900 text-white hover:scale-110'}`}
+        >
+           {!showAI && <span className="absolute inset-0 rounded-full border border-white/20 animate-ping opacity-20"></span>}
+           {showAI ? <X size={24} /> : <Sparkles size={24} className="group-hover:animate-spin" />}
+        </button>
+      </div>
+
+      {/* MODALS */}
+      {selectedEvent && (
+        <EventModal 
+          event={selectedEvent} 
+          onClose={() => setSelectedEvent(null)} 
+          onDelete={(id) => { onDeleteEvent(id); setSelectedEvent(null); }}
+          onUpdate={(event) => { 
+             StorageService.updateEvent(event); 
+             onRefreshData();
+             setSelectedEvent(null);
+          }}
+        />
+      )}
+      
       {showAddModal && (
         <AddEventModal 
           onClose={() => setShowAddModal(false)} 
           onAdd={async (e) => { 
               onAddEvent(e); 
-              if(googleConnected) {
-                 await GoogleCalendarService.createEvent(e);
-              }
+              if(googleConnected) await GoogleCalendarService.createEvent(e);
               setShowAddModal(false); 
           }} 
           onAddReminder={(r) => { onAddReminder(r); setShowAddModal(false); }}
         />
       )}
+
+      {showCalSelector && (
+          <CalendarSelector 
+            calendars={availableCalendars} 
+            onToggle={toggleCalendarSelection} 
+            onConfirm={finalizeSync} 
+            onCancel={() => setShowCalSelector(false)} 
+          />
+      )}
+
+      {showAI && <AIModal schedule={schedule.filter(e => e.date === dateKey)} onClose={() => setShowAI(false)} />}
       
       <DeveloperTools onReset={onRefreshData} />
     </div>

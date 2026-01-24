@@ -1,4 +1,4 @@
-import { MeetEvent } from '../types';
+import { MeetEvent, GoogleCalendarInfo } from '../types';
 import { GOOGLE_CONFIG } from '../config';
 
 declare global {
@@ -11,15 +11,12 @@ declare global {
 let tokenClient: any;
 let gapiInited = false;
 let gisInited = false;
-
-// We store the pending promise resolver here so the callback can access it
 let resolveAuthPromise: ((value: boolean) => void) | null = null;
 
 export const GoogleCalendarService = {
   
   initialize: async () => {
     return new Promise<void>((resolve, reject) => {
-      // 1. Load GAPI (for making API requests)
       if (window.gapi) {
         window.gapi.load('client', async () => {
           try {
@@ -30,25 +27,21 @@ export const GoogleCalendarService = {
             gapiInited = true;
             checkResolve();
           } catch (err) {
-            console.error("Error initializing GAPI client", err);
+            console.error("GAPI Init Error", err);
           }
         });
       }
 
-      // 2. Load GIS (for Authentication)
       if (window.google) {
         try {
-          // Initialize Token Client properly with the callback defined UPFRONT
           tokenClient = window.google.accounts.oauth2.initTokenClient({
             client_id: GOOGLE_CONFIG.clientId,
             scope: GOOGLE_CONFIG.scope,
             callback: (resp: any) => {
                if (resp.error) {
-                 console.error("Auth Error:", resp);
                  if (resolveAuthPromise) resolveAuthPromise(false);
                  return;
                }
-               // Success
                if (resolveAuthPromise) resolveAuthPromise(true);
             },
           });
@@ -68,27 +61,13 @@ export const GoogleCalendarService = {
   },
 
   authenticate: async (): Promise<boolean> => {
-    // Ensure initialized
-    if (!tokenClient) {
-        try {
-            await GoogleCalendarService.initialize();
-        } catch(e) { 
-            console.error(e);
-            return false; 
-        }
-    }
+    if (!tokenClient) await GoogleCalendarService.initialize();
+    
+    // Check if we already have a token
+    if (window.gapi.client.getToken() !== null) return true;
 
     return new Promise((resolve) => {
-      if (!tokenClient) {
-        alert("Google API failed to load. Check your ad blocker.");
-        resolve(false);
-        return;
-      }
-
-      // Store the resolve function so the global callback can call it
       resolveAuthPromise = resolve;
-
-      // Trigger the popup
       tokenClient.requestAccessToken({ prompt: 'consent' });
     });
   },
@@ -102,36 +81,35 @@ export const GoogleCalendarService = {
     }
   },
 
-  fetchEvents: async (): Promise<MeetEvent[]> => {
+  // 1. Fetch List of User's Calendars
+  fetchCalendars: async (): Promise<GoogleCalendarInfo[]> => {
+    if (!gapiInited) return [];
+    try {
+        const response = await window.gapi.client.calendar.calendarList.list();
+        const items = response.result.items || [];
+        return items.map((item: any) => ({
+            id: item.id,
+            summary: item.summary,
+            backgroundColor: item.backgroundColor,
+            selected: item.primary // Default select primary
+        }));
+    } catch (e) {
+        console.error("Error fetching calendar list", e);
+        return [];
+    }
+  },
+
+  // 2. Fetch Events from SPECIFIC Calendars
+  fetchEvents: async (calendarsToSync: GoogleCalendarInfo[]): Promise<MeetEvent[]> => {
     if (!gapiInited) return [];
 
-    try {
-      let calendars = [];
+    let allEvents: MeetEvent[] = [];
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 10); // Past 10 days
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 30); // Future 30 days
 
-      // 1. Try to Fetch List of Calendars
-      try {
-        const calendarListResponse = await window.gapi.client.calendar.calendarList.list();
-        // Limit to first 10 calendars to avoid memory crash if user has too many subscribed calendars
-        calendars = (calendarListResponse.result.items || []).slice(0, 10); 
-      } catch (listErr) {
-        console.warn("Could not list calendars, defaulting to Primary.", listErr);
-        calendars = [{ id: 'primary', summary: 'Primary', primary: true }];
-      }
-
-      if (calendars.length === 0) {
-         calendars = [{ id: 'primary', summary: 'Primary', primary: true }];
-      }
-
-      let allEvents: MeetEvent[] = [];
-      
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - 1);
-      
-      const endDate = new Date();
-      endDate.setMonth(endDate.getMonth() + 3);
-
-      // 2. Iterate and fetch events for each calendar
-      const promises = calendars.map(async (cal: any) => {
+    const promises = calendarsToSync.map(async (cal) => {
         try {
             const response = await window.gapi.client.calendar.events.list({
                 'calendarId': cal.id,
@@ -139,7 +117,7 @@ export const GoogleCalendarService = {
                 'timeMax': endDate.toISOString(),
                 'showDeleted': false,
                 'singleEvents': true,
-                'maxResults': 250, 
+                'maxResults': 100,
                 'orderBy': 'startTime',
             });
 
@@ -148,118 +126,61 @@ export const GoogleCalendarService = {
             return items.map((ev: any) => {
                 const start = ev.start.dateTime || ev.start.date;
                 const end = ev.end.dateTime || ev.end.date;
-                
                 const dateObj = new Date(start);
-                const dateStr = dateObj.toISOString().split('T')[0];
-                const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
                 
-                let endTimeStr = '23:59';
-                if (end) {
-                    const endObj = new Date(end);
-                    endTimeStr = endObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                }
-
-                const isPrimary = cal.primary;
-
-                // --- LINK EXTRACTION LOGIC ---
+                // Extract video link
                 let videoLink = undefined;
-                
-                // 1. Check Google Meet native data
                 if (ev.conferenceData?.entryPoints) {
                     const videoEntry = ev.conferenceData.entryPoints.find((e: any) => e.entryPointType === 'video');
                     if (videoEntry) videoLink = videoEntry.uri;
                 }
-
-                // 2. Scan Description for Zoom/Teams/Meet links using Regex
                 const description = ev.description || '';
                 if (!videoLink && description) {
-                    // Regex to find https links containing zoom, meet, or teams
-                    const urlRegex = /(https?:\/\/[^\s<"]+)/g;
-                    const matches = description.match(urlRegex);
-                    if (matches) {
-                        const found = matches.find((url: string) => 
-                            url.includes('zoom.us') || 
-                            url.includes('meet.google.com') || 
-                            url.includes('teams.microsoft.com')
-                        );
-                        if (found) videoLink = found;
+                    const match = description.match(/(https?:\/\/[^\s<"]+)/);
+                    if (match && (match[0].includes('zoom') || match[0].includes('meet') || match[0].includes('teams'))) {
+                        videoLink = match[0];
                     }
                 }
-
-                // 3. Check Location field
-                if (!videoLink && ev.location && (ev.location.includes('http') || ev.location.includes('zoom'))) {
-                     const urlRegex = /(https?:\/\/[^\s]+)/g;
-                     const match = ev.location.match(urlRegex);
-                     if (match) videoLink = match[0];
-                }
-
-                // --- CLEAN DESCRIPTION ---
-                // Remove HTML tags for clean display in our UI
-                const cleanNotes = description.replace(/<[^>]*>?/gm, '').trim();
 
                 return {
                     eventId: ev.id,
                     googleEventId: ev.id,
+                    calendarId: cal.id,
                     title: ev.summary || '(No Title)',
-                    type: 'personal',
-                    date: dateStr,
-                    startTime: timeStr === 'Invalid Date' ? '00:00' : timeStr,
-                    endTime: endTimeStr === 'Invalid Date' ? '23:59' : endTimeStr,
-                    platform: isPrimary ? (ev.location || 'Google Calendar') : `${cal.summary}`, 
-                    meetLink: videoLink, // Only put the VIDEO link here, not the event link
-                    notes: cleanNotes,
-                    reminders: []
+                    type: 'personal', // Google events default to personal
+                    date: dateObj.toISOString().split('T')[0],
+                    startTime: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                    endTime: new Date(end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                    platform: ev.location || 'Google Calendar',
+                    meetLink: videoLink,
+                    notes: description.replace(/<[^>]*>?/gm, ''),
+                    color: cal.backgroundColor
                 } as MeetEvent;
             });
-        } catch (calErr) {
-            console.warn(`Could not fetch events for calendar ${cal.summary}`, calErr);
+        } catch (e) {
+            console.warn(`Error fetching events for ${cal.summary}`, e);
             return [];
         }
-      });
+    });
 
-      const results = await Promise.all(promises);
-      results.forEach(calEvents => {
-          allEvents = [...allEvents, ...calEvents];
-      });
-
-      console.log(`Fetched ${allEvents.length} events from Google.`);
-      return allEvents;
-
-    } catch (err) {
-      console.error("Error fetching events", err);
-      return [];
-    }
+    const results = await Promise.all(promises);
+    results.forEach(calEvents => allEvents = [...allEvents, ...calEvents]);
+    return allEvents;
   },
 
   createEvent: async (event: MeetEvent): Promise<string | null> => {
     if (!gapiInited) return null;
-    
-    const startDateTime = new Date(`${event.date}T${event.startTime}:00`);
-    const endDateTime = new Date(`${event.date}T${event.endTime}:00`);
-
     const gEvent = {
       summary: event.title,
       location: event.platform,
       description: event.notes,
-      start: {
-        dateTime: startDateTime.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      },
-      end: {
-        dateTime: endDateTime.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      },
+      start: { dateTime: new Date(`${event.date}T${event.startTime}:00`).toISOString() },
+      end: { dateTime: new Date(`${event.date}T${event.endTime}:00`).toISOString() },
     };
-
     try {
-      const request = window.gapi.client.calendar.events.insert({
-        'calendarId': 'primary', 
-        'resource': gEvent,
-      });
-      const response = await request.execute();
-      return response.id;
+      const res = await window.gapi.client.calendar.events.insert({ 'calendarId': 'primary', 'resource': gEvent });
+      return res.result.id;
     } catch (e) {
-      console.error("Error creating Google event", e);
       return null;
     }
   }

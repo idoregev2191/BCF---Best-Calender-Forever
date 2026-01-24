@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
     <title>BCF: Best Calendar Forever</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     
     <!-- GOOGLE API SCRIPTS -->
     <script src="https://apis.google.com/js/api.js" async defer></script>
@@ -13,15 +13,15 @@
 
     <style>
       body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        background-color: #f0f4f8;
-        color: #1e293b;
+        font-family: 'Outfit', sans-serif;
+        background-color: #f8fafc; /* Fallback */
+        color: #0f172a;
         overflow-x: hidden;
         -webkit-tap-highlight-color: transparent;
         -webkit-font-smoothing: antialiased;
       }
       
-      /* MEET Dynamic Gradient Background */
+      /* Premium Aurora Background - Lighter & Softer */
       .meet-bg {
         position: fixed;
         top: 0;
@@ -30,43 +30,47 @@
         height: 100vh;
         z-index: -1;
         background: 
-          radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.15) 0%, transparent 40%), 
-          radial-gradient(circle at 90% 80%, rgba(220, 38, 38, 0.15) 0%, transparent 40%),
-          radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.8) 0%, rgba(241, 245, 249, 1) 100%);
+            radial-gradient(at 0% 0%, rgba(255, 200, 221, 0.5) 0px, transparent 50%),
+            radial-gradient(at 100% 0%, rgba(196, 240, 255, 0.5) 0px, transparent 50%),
+            radial-gradient(at 100% 100%, rgba(220, 255, 220, 0.5) 0px, transparent 50%),
+            radial-gradient(at 0% 100%, rgba(230, 230, 255, 0.5) 0px, transparent 50%),
+            linear-gradient(120deg, #fdfbf7 0%, #f4f7f6 100%);
+        background-size: 200% 200%;
+        animation: aurora 20s ease infinite alternate;
       }
 
-      /* Glassmorphism Utilities */
-      .glass-card {
-        background: rgba(255, 255, 255, 0.65);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.6);
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+      @keyframes aurora {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
       }
 
-      .glass-modal {
-        background: rgba(255, 255, 255, 0.85);
-        backdrop-filter: blur(30px);
-        -webkit-backdrop-filter: blur(30px);
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-      }
-
-      /* Clean Scrollbar */
-      ::-webkit-scrollbar {
-        width: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: rgba(148, 163, 184, 0.3); 
-        border-radius: 10px;
+      /* Premium Glass Utilities */
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(24px) saturate(180%);
+        -webkit-backdrop-filter: blur(24px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        box-shadow: 
+          0 4px 6px -1px rgba(0, 0, 0, 0.02),
+          0 20px 40px -8px rgba(0, 0, 0, 0.04);
       }
       
-      /* Animation Utilities */
+      .glass-card-hover:hover {
+        background: rgba(255, 255, 255, 0.85);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
+      }
+
+      /* Scrollbar */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 0px; /* Hidden but scrollable for cleaner look */
+        background: transparent;
+      }
+
       .tap-active:active {
-        transform: scale(0.97);
-        transition: transform 0.1s;
+        transform: scale(0.96);
+        transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
       }
     </style>
   <script type="importmap">
@@ -75,7 +79,8 @@
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
   }
 }
 </script>

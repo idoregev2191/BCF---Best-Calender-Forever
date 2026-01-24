@@ -1,4 +1,4 @@
-import { MeetEvent, Assignment, AssignmentStatus, UserState, UserProgress, StandaloneReminder } from '../types';
+import { MeetEvent, Assignment, AssignmentStatus, UserState, UserProgress, StandaloneReminder, MicrofeedbackData } from '../types';
 import { MEET_DATA } from '../constants';
 
 const STORAGE_KEYS = {
@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   CUSTOM_EVENTS: 'bcf_custom_events',
   REMINDERS: 'bcf_reminders',
   TASK_STATUS: 'bcf_task_status',
+  MICROFEEDBACK: 'bcf_microfeedback',
 };
 
 // --- Core Logic ---
@@ -39,13 +40,21 @@ export const StorageService = {
     const staticSchedule = groupData?.schedule || [];
     const staticAssignments = groupData?.generalAssignments || [];
 
-    // 2. Get Custom User Events from LocalStorage
+    // 2. Get Custom User Events (and Overrides) from LocalStorage
     const customEventsRaw = localStorage.getItem(STORAGE_KEYS.CUSTOM_EVENTS);
     const customEvents: MeetEvent[] = customEventsRaw ? JSON.parse(customEventsRaw) : [];
 
-    // 3. Merge
+    // 3. Merge Strategy: Custom Events overwrite Static Events if IDs match
+    const eventMap = new Map<string, MeetEvent>();
+    
+    // First, populate with static
+    staticSchedule.forEach(evt => eventMap.set(evt.eventId, evt));
+    
+    // Then, overlay custom events (this allows "editing" static events by saving a custom event with same ID)
+    customEvents.forEach(evt => eventMap.set(evt.eventId, evt));
+
     return {
-      schedule: [...staticSchedule, ...customEvents],
+      schedule: Array.from(eventMap.values()),
       generalAssignments: staticAssignments
     };
   },
@@ -57,7 +66,27 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.CUSTOM_EVENTS, JSON.stringify(customEvents));
   },
 
-  // NEW: Bulk import to prevent crash
+  // Updates an event. If it was static, it now becomes a "custom override".
+  updateEvent: (updatedEvent: MeetEvent) => {
+    const customEventsRaw = localStorage.getItem(STORAGE_KEYS.CUSTOM_EVENTS);
+    let customEvents: MeetEvent[] = customEventsRaw ? JSON.parse(customEventsRaw) : [];
+    
+    // Remove existing entry for this ID if it exists in custom
+    customEvents = customEvents.filter(e => e.eventId !== updatedEvent.eventId);
+    // Add the updated version
+    customEvents.push(updatedEvent);
+    
+    localStorage.setItem(STORAGE_KEYS.CUSTOM_EVENTS, JSON.stringify(customEvents));
+  },
+
+  deleteEvent: (eventId: string) => {
+    const customEventsRaw = localStorage.getItem(STORAGE_KEYS.CUSTOM_EVENTS);
+    let customEvents: MeetEvent[] = customEventsRaw ? JSON.parse(customEventsRaw) : [];
+    customEvents = customEvents.filter(e => e.eventId !== eventId);
+    localStorage.setItem(STORAGE_KEYS.CUSTOM_EVENTS, JSON.stringify(customEvents));
+  },
+
+  // Bulk import to prevent crash
   importEvents: (events: MeetEvent[]) => {
     const customEventsRaw = localStorage.getItem(STORAGE_KEYS.CUSTOM_EVENTS);
     const customEvents: MeetEvent[] = customEventsRaw ? JSON.parse(customEventsRaw) : [];
@@ -103,4 +132,18 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.TASK_STATUS, JSON.stringify(updated));
     return updated;
   },
+
+  // Microfeedback Management
+  saveMicrofeedback: (data: MicrofeedbackData) => {
+    const allFeedbackRaw = localStorage.getItem(STORAGE_KEYS.MICROFEEDBACK);
+    const allFeedback = allFeedbackRaw ? JSON.parse(allFeedbackRaw) : {};
+    allFeedback[data.eventId] = data;
+    localStorage.setItem(STORAGE_KEYS.MICROFEEDBACK, JSON.stringify(allFeedback));
+  },
+
+  getMicrofeedback: (eventId: string): MicrofeedbackData | null => {
+    const allFeedbackRaw = localStorage.getItem(STORAGE_KEYS.MICROFEEDBACK);
+    const allFeedback = allFeedbackRaw ? JSON.parse(allFeedbackRaw) : {};
+    return allFeedback[eventId] || null;
+  }
 };
