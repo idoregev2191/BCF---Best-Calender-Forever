@@ -1,4 +1,4 @@
-import { MeetData, MeetEvent } from './types';
+import { MeetData, MeetEvent, Assignment } from './types';
 
 // Helper to get dynamic date string
 const getDate = (offsetDays: number = 0) => {
@@ -7,76 +7,127 @@ const getDate = (offsetDays: number = 0) => {
   return d.toISOString().split('T')[0];
 };
 
-// --- GROUP D DATA (Morning Shift / Screenshots) ---
-const generateGroupDDay1 = (dateStr: string): MeetEvent[] => [
-  { eventId: `BF-${dateStr}`, title: "Breakfast", type: "meal", date: dateStr, startTime: "08:00", endTime: "09:00", platform: "Dining Hall", color: "#F59E0B" },
-  { eventId: `CS1-${dateStr}`, title: "Group D - CS", type: "lecture", date: dateStr, startTime: "09:00", endTime: "10:30", platform: "Error Room", color: "#FBBF24" },
-  { eventId: `ENT1-${dateStr}`, title: "Group D - ENT", type: "workshop", date: dateStr, startTime: "10:45", endTime: "12:15", platform: "Error Room", color: "#FBBF24" },
-  { eventId: `BREAK-${dateStr}`, title: "Break", type: "break", date: dateStr, startTime: "12:15", endTime: "12:45", platform: "Lounge" },
-  { eventId: `CS2-${dateStr}`, title: "Group D - CS", type: "lecture", date: dateStr, startTime: "12:45", endTime: "14:15", platform: "Error Room", color: "#FBBF24" },
-  { eventId: `LUNCH-${dateStr}`, title: "Lunch", type: "meal", date: dateStr, startTime: "14:15", endTime: "15:15", platform: "Dining Hall", color: "#F59E0B" },
-  { eventId: `DU1-${dateStr}`, title: "Group D - DU", type: "workshop", date: dateStr, startTime: "15:15", endTime: "16:45", platform: "Error Room", color: "#FBBF24" },
-  { eventId: `LAB-${dateStr}`, title: "Lab Lounge C+D", type: "lab", date: dateStr, startTime: "17:00", endTime: "18:00", platform: "Magic & Turtle", color: "#F59E0B", notes: "Attendance Mandatory" }
+// --- SCHEDULE GENERATORS ---
+
+// Morning Shift Logic (Groups A & D)
+const generateMorningScheduleDay1 = (dateStr: string, groupName: string, roomCS: string, roomENT: string): MeetEvent[] => [
+  { eventId: `BF-${groupName}-${dateStr}`, title: "Breakfast", type: "meal", date: dateStr, startTime: "08:00", endTime: "09:00", platform: "Dining Hall", color: "#F59E0B" },
+  { eventId: `CS1-${groupName}-${dateStr}`, title: `${groupName} - CS Lecture`, type: "lecture", date: dateStr, startTime: "09:00", endTime: "10:30", platform: roomCS, color: "#FBBF24" },
+  { eventId: `ENT1-${groupName}-${dateStr}`, title: `${groupName} - ENT Workshop`, type: "workshop", date: dateStr, startTime: "10:45", endTime: "12:15", platform: roomENT, color: "#FBBF24" },
+  { eventId: `BREAK-${groupName}-${dateStr}`, title: "Break", type: "break", date: dateStr, startTime: "12:15", endTime: "12:45", platform: "Lounge" },
+  { eventId: `CS2-${groupName}-${dateStr}`, title: `${groupName} - CS Practice`, type: "lecture", date: dateStr, startTime: "12:45", endTime: "14:15", platform: roomCS, color: "#FBBF24" },
+  { eventId: `LUNCH-${groupName}-${dateStr}`, title: "Lunch", type: "meal", date: dateStr, startTime: "14:15", endTime: "15:15", platform: "Dining Hall", color: "#F59E0B" },
+  { eventId: `DU1-${groupName}-${dateStr}`, title: `${groupName} - Design Unit`, type: "workshop", date: dateStr, startTime: "15:15", endTime: "16:45", platform: roomENT, color: "#FBBF24" },
+  { eventId: `LAB-${groupName}-${dateStr}`, title: "Open Lab", type: "lab", date: dateStr, startTime: "17:00", endTime: "18:00", platform: "Computer Lab", color: "#F59E0B", notes: "Attendance Mandatory" }
 ];
 
-const generateGroupDDay2 = (dateStr: string): MeetEvent[] => [
-  { eventId: `ENT2-${dateStr}`, title: "Group D - ENT", type: "workshop", date: dateStr, startTime: "09:00", endTime: "10:30", platform: "Magic Room", color: "#FBBF24" },
-  { eventId: `DU2-${dateStr}`, title: "Group D - DU", type: "workshop", date: dateStr, startTime: "10:45", endTime: "12:15", platform: "Unicorn Room", color: "#FBBF24" },
-  { eventId: `CS3-${dateStr}`, title: "Group D - CS", type: "lecture", date: dateStr, startTime: "12:45", endTime: "14:15", platform: "Error Room", color: "#FBBF24" },
-  { eventId: `CS4-${dateStr}`, title: "Group D - CS", type: "lecture", date: dateStr, startTime: "14:45", endTime: "16:15", platform: "Unicorn Room", color: "#FBBF24" },
-  { eventId: `LAB2-${dateStr}`, title: "Lab Lounge", type: "lab", date: dateStr, startTime: "17:15", endTime: "18:15", platform: "Seminar Room", notes: "Groups C+D", color: "#F59E0B" },
-  { eventId: `DINNER-${dateStr}`, title: "Dinner", type: "meal", date: dateStr, startTime: "18:15", endTime: "19:15", platform: "Dining Hall", color: "#F59E0B" },
-  { eventId: `MVP-${dateStr}`, title: "Y3 MVP Launch", type: "personal", date: dateStr, startTime: "19:15", endTime: "20:30", platform: "Auditorium", color: "#F59E0B" },
-  { eventId: `FREE-${dateStr}`, title: "Free Time", type: "personal", date: dateStr, startTime: "20:30", endTime: "22:00", color: "#FBBF24" }
+const generateMorningScheduleDay2 = (dateStr: string, groupName: string, roomCS: string, roomENT: string): MeetEvent[] => [
+  { eventId: `ENT2-${groupName}-${dateStr}`, title: `${groupName} - ENT Pitch`, type: "workshop", date: dateStr, startTime: "09:00", endTime: "10:30", platform: roomENT, color: "#FBBF24" },
+  { eventId: `DU2-${groupName}-${dateStr}`, title: `${groupName} - Wireframing`, type: "workshop", date: dateStr, startTime: "10:45", endTime: "12:15", platform: roomENT, color: "#FBBF24" },
+  { eventId: `CS3-${groupName}-${dateStr}`, title: `${groupName} - CS Lab`, type: "lecture", date: dateStr, startTime: "12:45", endTime: "14:15", platform: roomCS, color: "#FBBF24" },
+  { eventId: `CS4-${groupName}-${dateStr}`, title: `${groupName} - CS Review`, type: "lecture", date: dateStr, startTime: "14:45", endTime: "16:15", platform: roomCS, color: "#FBBF24" },
+  { eventId: `DINNER-${groupName}-${dateStr}`, title: "Dinner", type: "meal", date: dateStr, startTime: "18:15", endTime: "19:15", platform: "Dining Hall", color: "#F59E0B" },
+  { eventId: `ACT-${groupName}-${dateStr}`, title: "Evening Activity", type: "personal", date: dateStr, startTime: "19:15", endTime: "20:30", platform: "Auditorium", color: "#F59E0B" }
 ];
 
-// --- GROUP B DATA (Late Shift / Different Structure) ---
-const generateGroupBDay1 = (dateStr: string): MeetEvent[] => [
-  { eventId: `BF-B-${dateStr}`, title: "Late Breakfast", type: "meal", date: dateStr, startTime: "09:30", endTime: "10:30", platform: "Dining Hall", color: "#60A5FA" },
-  { eventId: `CS1-B-${dateStr}`, title: "Group B - CS", type: "lecture", date: dateStr, startTime: "10:45", endTime: "12:15", platform: "Target Room", color: "#3B82F6" },
-  { eventId: `LUNCH-B-${dateStr}`, title: "Lunch", type: "meal", date: dateStr, startTime: "12:30", endTime: "13:30", platform: "Dining Hall", color: "#60A5FA" },
-  { eventId: `ENT-B-${dateStr}`, title: "Group B - ENT", type: "workshop", date: dateStr, startTime: "13:45", endTime: "15:15", platform: "Seminar Room", color: "#3B82F6" },
-  { eventId: `LAB-B-${dateStr}`, title: "Lab A+B", type: "lab", date: dateStr, startTime: "15:30", endTime: "17:00", platform: "Computer Lab", color: "#60A5FA" },
-  { eventId: `DU-B-${dateStr}`, title: "Group B - DU", type: "workshop", date: dateStr, startTime: "17:15", endTime: "18:45", platform: "Target Room", color: "#3B82F6" }
+// Afternoon Shift Logic (Groups B & C)
+const generateAfternoonScheduleDay1 = (dateStr: string, groupName: string, roomCS: string, roomENT: string): MeetEvent[] => [
+  { eventId: `BF-${groupName}-${dateStr}`, title: "Late Breakfast", type: "meal", date: dateStr, startTime: "09:30", endTime: "10:30", platform: "Dining Hall", color: "#60A5FA" },
+  { eventId: `CS1-${groupName}-${dateStr}`, title: `${groupName} - CS Lecture`, type: "lecture", date: dateStr, startTime: "10:45", endTime: "12:15", platform: roomCS, color: "#3B82F6" },
+  { eventId: `LUNCH-${groupName}-${dateStr}`, title: "Lunch", type: "meal", date: dateStr, startTime: "12:30", endTime: "13:30", platform: "Dining Hall", color: "#60A5FA" },
+  { eventId: `ENT-${groupName}-${dateStr}`, title: `${groupName} - ENT Workshop`, type: "workshop", date: dateStr, startTime: "13:45", endTime: "15:15", platform: roomENT, color: "#3B82F6" },
+  { eventId: `LAB-${groupName}-${dateStr}`, title: "Lab Time", type: "lab", date: dateStr, startTime: "15:30", endTime: "17:00", platform: "Computer Lab", color: "#60A5FA" },
+  { eventId: `DU-${groupName}-${dateStr}`, title: `${groupName} - Design Unit`, type: "workshop", date: dateStr, startTime: "17:15", endTime: "18:45", platform: roomENT, color: "#3B82F6" }
+];
+
+const generateAfternoonScheduleDay2 = (dateStr: string, groupName: string, roomCS: string, roomENT: string): MeetEvent[] => [
+    { eventId: `BF-${groupName}2-${dateStr}`, title: "Breakfast", type: "meal", date: dateStr, startTime: "09:00", endTime: "10:00", platform: "Dining Hall", color: "#60A5FA" },
+    { eventId: `DU-${groupName}2-${dateStr}`, title: `${groupName} - DU Research`, type: "workshop", date: dateStr, startTime: "10:15", endTime: "11:45", platform: roomENT, color: "#3B82F6" },
+    { eventId: `CS-${groupName}2-${dateStr}`, title: `${groupName} - CS Lab`, type: "lab", date: dateStr, startTime: "12:00", endTime: "13:30", platform: roomCS, color: "#3B82F6" },
+    { eventId: `LUNCH-${groupName}2-${dateStr}`, title: "Lunch", type: "meal", date: dateStr, startTime: "13:30", endTime: "14:30", platform: "Dining Hall", color: "#60A5FA" },
+    { eventId: `ENT-${groupName}2-${dateStr}`, title: `${groupName} - ENT Pitch`, type: "workshop", date: dateStr, startTime: "14:45", endTime: "16:15", platform: roomENT, color: "#3B82F6" },
+    { eventId: `FUN-${groupName}2-${dateStr}`, title: "Social Night", type: "personal", date: dateStr, startTime: "20:00", endTime: "22:00", platform: "Lounge", color: "#60A5FA" }
 ];
 
 const generateSchedule = (group: string): MeetEvent[] => {
   const events: MeetEvent[] = [];
-  for (let i = -5; i < 5; i++) {
+  
+  // Dynamic settings based on group
+  let isMorning = false;
+  let roomCS = "Error Room";
+  let roomENT = "Magic Room";
+
+  if (group === 'GroupA') { isMorning = true; roomCS = "Ada Room"; roomENT = "Turing Room"; }
+  if (group === 'GroupD') { isMorning = true; roomCS = "Error Room"; roomENT = "Unicorn Room"; }
+  if (group === 'GroupB') { isMorning = false; roomCS = "Target Room"; roomENT = "Seminar Room"; }
+  if (group === 'GroupC') { isMorning = false; roomCS = "Java Room"; roomENT = "Python Room"; }
+
+  for (let i = -7; i < 7; i++) {
     const d = getDate(i);
-    if (group === 'GroupD') {
-        if (Math.abs(i) % 2 === 0) events.push(...generateGroupDDay1(d));
-        else events.push(...generateGroupDDay2(d));
-    } else if (group === 'GroupB') {
-        events.push(...generateGroupBDay1(d));
+    const cycle = Math.abs(i) % 2;
+    
+    if (isMorning) {
+        if (cycle === 0) events.push(...generateMorningScheduleDay1(d, group, roomCS, roomENT));
+        else events.push(...generateMorningScheduleDay2(d, group, roomCS, roomENT));
     } else {
-        // Fallback for A and C
-        events.push({ eventId: `GEN-${d}`, title: `${group} Session`, type: 'lecture', date: d, startTime: '10:00', endTime: '12:00', platform: 'Main Hall', color: '#94A3B8' });
+        if (cycle === 0) events.push(...generateAfternoonScheduleDay1(d, group, roomCS, roomENT));
+        else events.push(...generateAfternoonScheduleDay2(d, group, roomCS, roomENT));
     }
   }
   return events;
 };
+
+// --- ASSIGNMENTS ---
+
+const assignmentsY3: Assignment[] = [
+    { assignmentId: "A1", title: "CS: Recursion Problem Set", description: "Solve the 5 problems in python_recursion.pdf.", dueDate: getDate(1) },
+    { assignmentId: "A3", title: "ENT: Value Proposition", description: "Complete the canvas for your team's idea.", dueDate: getDate(3) },
+    { assignmentId: "A4", title: "DU: User Personas", description: "Create 2 distinct user personas.", dueDate: getDate(2) }
+];
+
+const assignmentsY2: Assignment[] = [
+    { assignmentId: "Y2-A1", title: "CS: OOP Basics", description: "Implement the Animal class hierarchy.", dueDate: getDate(1) },
+    { assignmentId: "Y2-A2", title: "ENT: Problem Interviews", description: "Interview 5 potential users.", dueDate: getDate(4) },
+    { assignmentId: "Y2-A3", title: "Global: Guest Speaker Prep", description: "Read the bio of tomorrow's speaker.", dueDate: getDate(0) }
+];
+
+const assignmentsY1: Assignment[] = [
+    { assignmentId: "Y1-A1", title: "CS: Loops & Conditions", description: "Finish the 'Guess the Number' game.", dueDate: getDate(1) },
+    { assignmentId: "Y1-A2", title: "ENT: Team Contract", description: "Sign and submit your team working agreement.", dueDate: getDate(2) },
+    { assignmentId: "Y1-A3", title: "Intro: Reflection Paper", description: "Write 200 words about your first week.", dueDate: getDate(5) }
+];
+
+
+// --- FINAL DATA EXPORT ---
 
 export const MEET_DATA: MeetData = {
   "cohorts": {
     "2025": { 
       "description": "Y3 Cohort",
       "groups": {
-        "GroupD": { 
-            "groupMentor": "Noa", 
-            "schedule": generateSchedule('GroupD'), 
-            "generalAssignments": [{ assignmentId: "A1", title: "Submit CS Problem Set", description: "Recursion & Trees", dueDate: getDate(2) }] 
-        },
-        "GroupB": { 
-            "groupMentor": "Yoni", 
-            "schedule": generateSchedule('GroupB'), 
-            "generalAssignments": [{ assignmentId: "A2", title: "ENT Market Research", description: "Interviews", dueDate: getDate(3) }] 
-        },
-        "GroupA": { "groupMentor": "Tamar", "schedule": generateSchedule('GroupA'), "generalAssignments": [] },
-        "GroupC": { "groupMentor": "David", "schedule": generateSchedule('GroupC'), "generalAssignments": [] }
+        "GroupA": { "groupMentor": "Tamar", "schedule": generateSchedule('GroupA'), "generalAssignments": assignmentsY3 },
+        "GroupB": { "groupMentor": "Yoni", "schedule": generateSchedule('GroupB'), "generalAssignments": assignmentsY3 },
+        "GroupC": { "groupMentor": "David", "schedule": generateSchedule('GroupC'), "generalAssignments": assignmentsY3 },
+        "GroupD": { "groupMentor": "Noa", "schedule": generateSchedule('GroupD'), "generalAssignments": assignmentsY3 }
       }
     },
-    "2026": { "description": "Y2 Cohort", "groups": {} },
-    "2027": { "description": "Y1 Cohort", "groups": {} }
+    "2026": { 
+      "description": "Y2 Cohort", 
+      "groups": {
+        "GroupA": { "groupMentor": "Sarah", "schedule": generateSchedule('GroupA'), "generalAssignments": assignmentsY2 },
+        "GroupB": { "groupMentor": "Mike", "schedule": generateSchedule('GroupB'), "generalAssignments": assignmentsY2 },
+        "GroupC": { "groupMentor": "Alex", "schedule": generateSchedule('GroupC'), "generalAssignments": assignmentsY2 },
+        "GroupD": { "groupMentor": "Rachel", "schedule": generateSchedule('GroupD'), "generalAssignments": assignmentsY2 }
+      } 
+    },
+    "2027": { 
+      "description": "Y1 Cohort", 
+      "groups": {
+        "GroupA": { "groupMentor": "Ben", "schedule": generateSchedule('GroupA'), "generalAssignments": assignmentsY1 },
+        "GroupB": { "groupMentor": "Dana", "schedule": generateSchedule('GroupB'), "generalAssignments": assignmentsY1 },
+        "GroupC": { "groupMentor": "Tal", "schedule": generateSchedule('GroupC'), "generalAssignments": assignmentsY1 },
+        "GroupD": { "groupMentor": "Omer", "schedule": generateSchedule('GroupD'), "generalAssignments": assignmentsY1 }
+      } 
+    }
   }
 };

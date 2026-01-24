@@ -437,14 +437,24 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         )}
       </div>
 
-      {/* FLOATING AI BUTTON - Bottom Right */}
+      {/* FLOATING AI BUTTON - Bottom Right - AMAZING STYLE */}
       <div className="fixed bottom-24 right-6 z-50">
         <button
           onClick={() => setShowAI(!showAI)}
-          className={`relative group flex items-center justify-center w-14 h-14 rounded-full shadow-2xl transition-all duration-500 ${showAI ? 'bg-white text-slate-900 rotate-90 scale-90' : 'bg-slate-900 text-white hover:scale-110'}`}
+          className={`relative group flex items-center justify-center w-16 h-16 rounded-[24px] shadow-2xl transition-all duration-500 overflow-hidden ${showAI ? 'rotate-0' : 'hover:scale-105'}`}
         >
-           {!showAI && <span className="absolute inset-0 rounded-full border border-white/20 animate-ping opacity-20"></span>}
-           {showAI ? <X size={24} /> : <Sparkles size={24} className="group-hover:animate-spin" />}
+           {/* Amazing Liquid Background */}
+           <div className={`absolute inset-0 bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 transition-opacity duration-500 ${showAI ? 'opacity-0' : 'opacity-100 animate-gradient-xy'}`}></div>
+           <div className={`absolute inset-0 bg-slate-900 transition-opacity duration-500 ${showAI ? 'opacity-100' : 'opacity-0'}`}></div>
+           
+           {/* Subtle Pulse */}
+           {!showAI && (
+               <div className="absolute inset-0 rounded-[24px] ring-2 ring-purple-400/50 animate-pulse"></div>
+           )}
+
+           <div className="relative z-10 text-white transition-transform duration-500">
+               {showAI ? <X size={28} strokeWidth={3} /> : <Sparkles size={28} strokeWidth={2.5} className="drop-shadow-md" />}
+           </div>
         </button>
       </div>
 
@@ -483,7 +493,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           />
       )}
 
-      {showAI && <AIModal schedule={schedule.filter(e => e.date === dateKey)} onClose={() => setShowAI(false)} />}
+      {/* Pass FULL schedule to AI */}
+      {showAI && <AIModal schedule={schedule} onClose={() => setShowAI(false)} />}
       
       <DeveloperTools onReset={onRefreshData} />
     </div>

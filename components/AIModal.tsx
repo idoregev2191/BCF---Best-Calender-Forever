@@ -10,7 +10,7 @@ interface AIModalProps {
 
 const AIModal: React.FC<AIModalProps> = ({ schedule, onClose }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', text: "Hey! I'm your scheduling assistant. What's on your mind?" }
+    { role: 'model', text: "Hey! I'm here to help with your schedule. Ask me anything!" }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -34,15 +34,23 @@ const AIModal: React.FC<AIModalProps> = ({ schedule, onClose }) => {
       const ai = new GoogleGenAI({ apiKey });
       
       const today = new Date().toISOString().split('T')[0];
+      
+      // Simplify the schedule for the AI to save tokens but give full context
+      const simpleSchedule = schedule.map(e => `${e.date} (${e.startTime}-${e.endTime}): ${e.title} at ${e.platform || 'Location TBD'}`).join('\n');
+
       const context = `
+        You are a super helpful, friendly, and cool AI assistant for a student at a summer program called MEET. 
         Current Date: ${today}.
-        User's Schedule (JSON): ${JSON.stringify(schedule.map(e => ({ title: e.title, time: `${e.startTime}-${e.endTime}`, date: e.date, type: e.type, location: e.platform })))}.
         
-        You are a smart, concise, and helpful AI assistant for a student at 'MEET'.
-        IMPORTANT FORMATTING RULES:
-        1. Use **bold** for times, locations, and key event names.
-        2. Keep responses short (under 50 words unless asked for a summary).
-        3. Be casual but professional.
+        Here is the student's FULL schedule:
+        ${simpleSchedule}
+        
+        Your Goal: Help them manage their time, find out when their next break is, or what class they have next week.
+        Tone: Friendly, casual, nice, but very helpful. Not robotic.
+        
+        Formatting:
+        - Use **bold** for key info like times or room names.
+        - Keep it relatively short.
       `;
 
       const response = await ai.models.generateContent({
@@ -82,22 +90,22 @@ const AIModal: React.FC<AIModalProps> = ({ schedule, onClose }) => {
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white/50">
            <div className="flex items-center gap-2">
-             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white">
+             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-400 to-indigo-500 flex items-center justify-center text-white shadow-lg">
                 <Sparkles size={14} />
              </div>
              <div>
-                <h3 className="font-bold text-slate-900 text-sm leading-none">AI Assistant</h3>
-                <p className="text-[10px] font-medium text-slate-500 mt-0.5">Powered by Gemini</p>
+                <h3 className="font-bold text-slate-900 text-sm leading-none">Schedule Pal</h3>
+                <p className="text-[10px] font-medium text-slate-500 mt-0.5">Always here to help</p>
              </div>
            </div>
            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"><X size={16} /></button>
         </div>
 
         {/* Chat Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50" ref={scrollRef}>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/30" ref={scrollRef}>
            {messages.map((m, i) => (
              <div key={i} className={`flex gap-3 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-               <div className={`p-3 rounded-2xl text-xs font-medium max-w-[85%] leading-relaxed ${m.role === 'user' ? 'bg-slate-900 text-white rounded-tr-sm' : 'bg-white shadow-sm border border-slate-100 text-slate-700 rounded-tl-sm'}`}>
+               <div className={`p-3 rounded-2xl text-xs font-medium max-w-[85%] leading-relaxed ${m.role === 'user' ? 'bg-slate-900 text-white rounded-tr-sm shadow-md' : 'bg-white shadow-sm border border-slate-100 text-slate-700 rounded-tl-sm'}`}>
                  {renderMessageText(m.text)}
                </div>
              </div>

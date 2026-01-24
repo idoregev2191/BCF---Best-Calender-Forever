@@ -65,6 +65,8 @@ const SignUp: React.FC<SignUpProps> = ({ onComplete }) => {
                   onChange={e => setFormData({ ...formData, cohort: e.target.value })}
                 >
                   <option value="2025">2025 (Y3)</option>
+                  <option value="2026">2026 (Y2)</option>
+                  <option value="2027">2027 (Y1)</option>
                 </select>
                 <div className="absolute inset-y-0 right-0 pr-5 flex items-center pointer-events-none text-slate-400">
                    <Layers size={16} />
