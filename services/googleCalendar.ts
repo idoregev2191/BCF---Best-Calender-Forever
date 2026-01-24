@@ -99,8 +99,8 @@ export const GoogleCalendarService = {
     }
   },
 
-  // 2. Fetch Events from SPECIFIC Calendars
-  fetchEvents: async (calendarsToSync: GoogleCalendarInfo[]): Promise<MeetEvent[]> => {
+  // 2. Fetch Events with SMART FILTERING
+  fetchEvents: async (calendarsToSync: GoogleCalendarInfo[], userGroup: string): Promise<MeetEvent[]> => {
     if (!gapiInited) return [];
 
     let allEvents: MeetEvent[] = [];
@@ -108,6 +108,11 @@ export const GoogleCalendarService = {
     startDate.setDate(startDate.getDate() - 10); // Past 10 days
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + 30); // Future 30 days
+
+    // Normalize User Group for comparison (e.g., "GroupA" -> "A", "Group D" -> "D")
+    const userGroupChar = userGroup.replace(/group/i, '').trim().toUpperCase(); 
+    const allGroupChars = ['A', 'B', 'C', 'D'];
+    const otherGroups = allGroupChars.filter(g => g !== userGroupChar);
 
     const promises = calendarsToSync.map(async (cal) => {
         try {
@@ -117,18 +122,49 @@ export const GoogleCalendarService = {
                 'timeMax': endDate.toISOString(),
                 'showDeleted': false,
                 'singleEvents': true,
-                'maxResults': 100,
+                'maxResults': 150,
                 'orderBy': 'startTime',
             });
 
             const items = response.result.items || [];
+            const calNameLower = cal.summary.toLowerCase();
             
-            return items.map((ev: any) => {
+            // Heuristic: Is this likely a "MEET" or "School" calendar?
+            // If so, we apply stricter filtering.
+            const isMeetCalendar = calNameLower.includes('meet') || calNameLower.includes('class') || calNameLower.includes('cohort') || calNameLower.includes('202');
+
+            return items.reduce((acc: MeetEvent[], ev: any) => {
+                const title = ev.summary || '(No Title)';
+                const titleUpper = title.toUpperCase();
+
+                // --- SMART ALGORITHM ---
+                // If it's a MEET calendar, filter out events that explicitly mention OTHER groups
+                if (isMeetCalendar) {
+                    // Check if title mentions "Group X" or just "X" in a specific context
+                    const mentionsOtherGroup = otherGroups.some(g => {
+                         // Matches "Group A", "Group-A", "GroupA"
+                         return titleUpper.includes(`GROUP ${g}`) || 
+                                titleUpper.includes(`GROUP-${g}`) || 
+                                titleUpper.includes(`GROUP${g}`);
+                    });
+
+                    // If it mentions another group, and DOES NOT mention our group, skip it.
+                    // (We allow it if it says "Group A & B" and we are B).
+                    if (mentionsOtherGroup) {
+                        const mentionsMyGroup = titleUpper.includes(`GROUP ${userGroupChar}`) || 
+                                                titleUpper.includes(`GROUP-${userGroupChar}`) || 
+                                                titleUpper.includes(`GROUP${userGroupChar}`);
+                        
+                        if (!mentionsMyGroup) return acc; // SKIP THIS EVENT
+                    }
+                }
+
+                // --- DATA MAPPING ---
                 const start = ev.start.dateTime || ev.start.date;
                 const end = ev.end.dateTime || ev.end.date;
                 const dateObj = new Date(start);
                 
-                // Extract video link
+                // Extract video link (Meet, Zoom, Teams)
                 let videoLink = undefined;
                 if (ev.conferenceData?.entryPoints) {
                     const videoEntry = ev.conferenceData.entryPoints.find((e: any) => e.entryPointType === 'video');
@@ -142,21 +178,26 @@ export const GoogleCalendarService = {
                     }
                 }
 
-                return {
+                // Handle Location - If empty, set to undefined so UI hides it
+                const location = ev.location ? ev.location : undefined;
+
+                acc.push({
                     eventId: ev.id,
                     googleEventId: ev.id,
                     calendarId: cal.id,
-                    title: ev.summary || '(No Title)',
-                    type: 'personal', // Google events default to personal
+                    title: title,
+                    type: 'personal', // Google events default to personal, user can change logic if needed
                     date: dateObj.toISOString().split('T')[0],
                     startTime: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                     endTime: new Date(end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                    platform: ev.location || 'Google Calendar',
+                    platform: location, // Undefined if empty
                     meetLink: videoLink,
-                    notes: description.replace(/<[^>]*>?/gm, ''),
+                    notes: description.replace(/<[^>]*>?/gm, '').trim(),
                     color: cal.backgroundColor
-                } as MeetEvent;
-            });
+                });
+                return acc;
+            }, []);
+
         } catch (e) {
             console.warn(`Error fetching events for ${cal.summary}`, e);
             return [];

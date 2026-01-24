@@ -95,7 +95,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       setShowCalSelector(false);
       setIsSyncing(true);
       const selectedCals = availableCalendars.filter(c => c.selected);
-      const events = await GoogleCalendarService.fetchEvents(selectedCals);
+      // Pass User Group to filtered events properly!
+      const events = await GoogleCalendarService.fetchEvents(selectedCals, user.group);
       onImportEvents(events);
       setGoogleConnected(true);
       setTimeout(() => onRefreshData(), 100);
@@ -255,18 +256,29 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
-           {/* Google Sync */}
+           {/* Google Sync - NEW OFFICIAL DESIGN */}
            <button 
              onClick={initGoogleSync}
              disabled={isSyncing}
-             className={`flex items-center gap-2 px-4 py-3 rounded-2xl font-bold border transition-all active:scale-95 ${
+             className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold border transition-all active:scale-95 shadow-sm hover:shadow-md ${
                googleConnected 
-                ? 'bg-red-50 text-red-600 border-red-100' 
-                : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:text-blue-600 shadow-sm'
+                ? 'bg-white text-slate-700 border-slate-200' 
+                : 'bg-white text-slate-700 border-slate-200'
              }`}
            >
-             {isSyncing ? <RefreshCw size={18} className="animate-spin" /> : <CalIcon size={18} />}
-             <span className="text-sm font-bold">{googleConnected ? 'Unsync' : 'Sync G-Cal'}</span>
+             {isSyncing ? (
+                 <RefreshCw size={18} className="animate-spin text-slate-400" />
+             ) : (
+                <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+                    <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
+                    <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" />
+                    <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" />
+                    <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.769 -21.864 51.959 -21.864 51.129 C -21.864 50.299 -21.734 49.489 -21.484 48.729 L -21.484 45.639 L -25.464 45.639 C -26.274 47.249 -26.734 49.069 -26.734 51.129 C -26.734 53.189 -26.274 55.009 -25.464 56.619 L -21.484 53.529 Z" />
+                    <path fill="#EA4335" d="M -14.754 43.749 C -12.984 43.749 -11.404 44.369 -10.154 45.579 L -6.724 42.149 C -8.804 40.209 -11.514 39 -14.754 39 C -19.444 39 -23.494 41.709 -25.464 45.639 L -21.484 48.729 C -20.534 45.879 -17.884 43.749 -14.754 43.749 Z" />
+                    </g>
+                </svg>
+             )}
+             <span className="text-sm font-bold text-slate-700">{googleConnected ? 'Sync Active' : 'Sync with Google Calendar'}</span>
            </button>
            
            {/* Add Button */}
@@ -437,24 +449,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         )}
       </div>
 
-      {/* FLOATING AI BUTTON - Bottom Right - AMAZING STYLE */}
+      {/* MINIMALIST AI BUTTON */}
       <div className="fixed bottom-24 right-6 z-50">
         <button
           onClick={() => setShowAI(!showAI)}
-          className={`relative group flex items-center justify-center w-16 h-16 rounded-[24px] shadow-2xl transition-all duration-500 overflow-hidden ${showAI ? 'rotate-0' : 'hover:scale-105'}`}
+          className={`flex items-center justify-center w-12 h-12 rounded-full shadow-lg transition-all duration-300 ${
+              showAI ? 'bg-white text-slate-900 rotate-45' : 'bg-slate-900 text-white hover:scale-110 hover:shadow-indigo-500/30'
+          }`}
         >
-           {/* Amazing Liquid Background */}
-           <div className={`absolute inset-0 bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 transition-opacity duration-500 ${showAI ? 'opacity-0' : 'opacity-100 animate-gradient-xy'}`}></div>
-           <div className={`absolute inset-0 bg-slate-900 transition-opacity duration-500 ${showAI ? 'opacity-100' : 'opacity-0'}`}></div>
-           
-           {/* Subtle Pulse */}
-           {!showAI && (
-               <div className="absolute inset-0 rounded-[24px] ring-2 ring-purple-400/50 animate-pulse"></div>
-           )}
-
-           <div className="relative z-10 text-white transition-transform duration-500">
-               {showAI ? <X size={28} strokeWidth={3} /> : <Sparkles size={28} strokeWidth={2.5} className="drop-shadow-md" />}
-           </div>
+           {showAI ? <Plus size={24} /> : <Sparkles size={20} />}
         </button>
       </div>
 
