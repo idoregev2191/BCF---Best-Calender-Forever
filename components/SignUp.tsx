@@ -44,8 +44,8 @@ const SignUp: React.FC<SignUpProps> = ({ onComplete }) => {
           <h1 className="text-5xl font-black text-slate-900 tracking-tighter mb-1">
             bcf<span className="text-blue-600">.</span>
           </h1>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">
-            Plan Like a Pro
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center mt-2 max-w-[260px] leading-relaxed">
+            Best Calendar Forever, designed for MEET students
           </p>
         </div>
 
