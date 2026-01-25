@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserState, MeetEvent, StandaloneReminder, GoogleCalendarInfo } from '../types';
-import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Check, RefreshCw, Video, Sparkles } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Check, RefreshCw, Sparkles, CalendarDays, MoreHorizontal } from 'lucide-react';
 import EventModal from './EventModal';
 import AddEventModal from './AddEventModal';
 import DeveloperTools from './DeveloperTools';
@@ -23,23 +23,101 @@ interface CalendarViewProps {
 
 type ViewMode = 'day' | 'month';
 
-// Helper for consistent pastel colors from strings (for Google events)
-const stringToPastel = (str: string) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const h = Math.abs(hash) % 360;
-  return `hsl(${h}, 70%, 95%)`; // Very light background
-};
-
-const stringToBorder = (str: string) => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+// --- VISUAL STYLE ALGORITHM ---
+const getMeetEventStyle = (event: MeetEvent, isGoogle: boolean) => {
+    // 1. Google Override
+    if (isGoogle) {
+        let hash = 0;
+        for (let i = 0; i < event.title.length; i++) hash = event.title.charCodeAt(i) + ((hash << 5) - hash);
+        const h = Math.abs(hash) % 360;
+        
+        return {
+            bg: `hsla(${h}, 70%, 96%, 1)`, 
+            border: `1px solid hsla(${h}, 40%, 80%, 1)`, // Thinner border
+            text: "#334155",
+            accent: `hsl(${h}, 70%, 60%)`,
+            icon: `hsla(${h}, 70%, 40%, 0.7)`
+        };
     }
-    const h = Math.abs(hash) % 360;
-    return `hsl(${h}, 70%, 50%)`; // Solid border color
+
+    const titleUpper = event.title.toUpperCase();
+    const typeUpper = event.type.toUpperCase();
+
+    // CS / Tech -> Deep Blue
+    if (titleUpper.includes("CS") || titleUpper.includes("PYTHON") || titleUpper.includes("JAVA") || titleUpper.includes("CODE")) {
+        return {
+            bg: "bg-[#E0F2FE]", // Sky 100
+            border: "1px solid #BAE6FD", // Sky 200
+            text: "text-[#0369A1]", // Sky 700
+            accent: "bg-[#0284C7]",
+            icon: "text-[#0284C7]"
+        };
+    }
+
+    // ENT / Business -> Warm Yellow
+    if (titleUpper.includes("ENT") || titleUpper.includes("BUSINESS") || titleUpper.includes("PITCH") || titleUpper.includes("VALUE")) {
+        return {
+            bg: "bg-[#FFFBEB]", // Amber 50
+            border: "1px solid #FDE68A", // Amber 200
+            text: "text-[#92400E]", // Amber 800
+            accent: "bg-[#D97706]",
+            icon: "text-[#D97706]"
+        };
+    }
+
+    // DU / Design -> Vivid Pink
+    if (titleUpper.includes("DU") || titleUpper.includes("DESIGN") || titleUpper.includes("UX") || titleUpper.includes("WIREFRAM")) {
+        return {
+            bg: "bg-[#FDF2F8]", // Pink 50
+            border: "1px solid #FBCFE8", // Pink 200
+            text: "text-[#9D174D]", // Pink 800
+            accent: "bg-[#DB2777]",
+            icon: "text-[#DB2777]"
+        };
+    }
+
+    // MEALS -> Fresh Orange
+    if (typeUpper === 'MEAL' || titleUpper.includes("LUNCH") || titleUpper.includes("DINNER") || titleUpper.includes("BREAKFAST")) {
+        return {
+            bg: "bg-[#FFF7ED]", // Orange 50
+            border: "1px solid #FED7AA", // Orange 200
+            text: "text-[#9A3412]", // Orange 800
+            accent: "bg-[#EA580C]",
+            icon: "text-[#EA580C]"
+        };
+    }
+
+    // BREAKS -> Minimal Slate/Gray
+    if (typeUpper === 'BREAK' || titleUpper.includes("MOVING")) {
+        return {
+            bg: "bg-[#F8FAFC]", // Slate 50
+            border: "1px dashed #CBD5E1", // Slate 300
+            text: "text-[#64748B]", // Slate 500
+            accent: "bg-[#94A3B8]",
+            icon: "text-[#64748B]",
+            isBreak: true
+        };
+    }
+
+    // PERSONAL / SOCIAL -> Purple
+    if (typeUpper === 'PERSONAL' || titleUpper.includes("SOCIAL") || titleUpper.includes("FUN") || titleUpper.includes("CLOSING") || titleUpper.includes("OPENING") || titleUpper.includes("WELCOME")) {
+        return {
+            bg: "bg-[#FAF5FF]", // Purple 50
+            border: "1px solid #E9D5FF", // Purple 200
+            text: "text-[#6B21A8]", // Purple 800
+            accent: "bg-[#9333EA]",
+            icon: "text-[#9333EA]"
+        };
+    }
+
+    // Default
+    return {
+        bg: "bg-white",
+        border: "1px solid #E2E8F0",
+        text: "text-slate-700",
+        accent: "bg-slate-400",
+        icon: "text-slate-400"
+    };
 };
 
 const CalendarView: React.FC<CalendarViewProps> = ({ 
@@ -55,7 +133,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('day');
   
-  // DEMO DATE INITIALIZATION: 2026-01-27
+  // Use Jan 27, 2026 for demo purposes as requested, but easily swappable
   const [currentDate, setCurrentDate] = useState(new Date("2026-01-27T10:00:00"));
 
   const [selectedEvent, setSelectedEvent] = useState<MeetEvent | null>(null);
@@ -66,7 +144,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 60000); // Update every minute
+    const interval = setInterval(() => setNow(new Date()), 60000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -93,7 +171,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     else newDate.setMonth(currentDate.getMonth() + 1);
     setCurrentDate(newDate);
   };
-  const handleToday = () => setCurrentDate(new Date("2026-01-27")); // Reset to Demo Date
+  const handleToday = () => setCurrentDate(new Date()); 
 
   // --- GOOGLE SYNC LOGIC ---
   const initGoogleSync = async () => {
@@ -137,12 +215,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   // --- LAYOUT HELPERS ---
-  const formattedTitle = viewMode === 'day' 
-    ? currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
-    : currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
+  const dayNum = currentDate.toLocaleDateString('en-US', { day: 'numeric' });
+  const monthYear = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  const START_HOUR = 7;
-  const END_HOUR = 23; 
+  // GRID SETTINGS
+  const START_HOUR = 8;
+  const END_HOUR = 20; // 8 PM
   const TOTAL_HOURS = END_HOUR - START_HOUR;
   const timeSlots = Array.from({ length: TOTAL_HOURS }, (_, i) => i + START_HOUR);
 
@@ -151,7 +230,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     return h * 60 + m;
   };
   
-  // Robust Layout Algorithm for Side-by-Side Events
+  // Layout Algorithm
   const calculateEventLayout = (events: MeetEvent[]) => {
     if (events.length === 0) return [];
     
@@ -219,7 +298,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
            ...ev,
            width: 100 / count,
            left: (100 / count) * ev.colIndex,
-           isCrowded: count > 2
          });
        });
     });
@@ -233,18 +311,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     const dayStart = START_HOUR * 60;
     const totalDayMinutes = TOTAL_HOURS * 60;
     const top = ((startTotal - dayStart) / totalDayMinutes) * 100;
-    
-    // Ensure 15 min events are visible
     const rawHeight = ((endTotal - startTotal) / totalDayMinutes) * 100;
-    const height = Math.max(rawHeight, 2.5); 
+    const height = Math.max(rawHeight, 3); // Minimum visible height
     
     return { top: `${top}%`, height: `${height}%` };
-  };
-
-  const getReminderTop = (time: string) => {
-    const total = getMinutes(time);
-    const dayStart = START_HOUR * 60;
-    return ((total - dayStart) / (TOTAL_HOURS * 60)) * 100;
   };
 
   const getCurrentTimeTop = () => {
@@ -257,7 +327,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const dateKey = currentDate.toISOString().split('T')[0];
   const daysEvents = schedule.filter(e => e.date === dateKey);
   const layoutEvents = calculateEventLayout(daysEvents);
-  const daysReminders = reminders.filter(r => r.date === dateKey);
+  const isToday = dateKey === new Date().toISOString().split('T')[0];
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -270,256 +340,193 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const { days: daysInMonth, firstDay: startDayOffset } = getDaysInMonth(currentDate);
   const monthDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: startDayOffset }, (_, i) => i);
-  
-  const getGreeting = () => {
-      const h = new Date().getHours();
-      if (h < 12) return { text: "Good Morning", icon: "☀️" };
-      if (h < 18) return { text: "Good Afternoon", icon: "🌤️" };
-      return { text: "Good Evening", icon: "🌙" };
-  };
-  const greeting = getGreeting();
 
   return (
-    <div className="flex flex-col h-full overflow-hidden pb-24 w-full">
+    <div className="flex flex-col h-full w-full bg-transparent">
       
-      {/* --- HEADER --- */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between px-4 mb-6 gap-6">
-        <div>
-           <div className="flex items-center gap-2 mb-1">
-             <span className="text-xl">{greeting.icon}</span>
-             <span className="text-lg font-bold text-slate-500">{greeting.text}, {user.name.split(' ')[0]}</span>
-           </div>
-           
-           <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-none mb-4">
-             {formattedTitle}
-           </h1>
-
-           <div className="flex items-center gap-3">
-              <div className="flex bg-white rounded-xl p-1 shadow-sm border border-slate-200">
-                <button onClick={handlePrev} className="p-2 hover:bg-slate-50 rounded-lg text-slate-600 transition-colors"><ChevronLeft size={20} /></button>
-                <button onClick={handleToday} className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">Today (2026)</button>
-                <button onClick={handleNext} className="p-2 hover:bg-slate-50 rounded-lg text-slate-600 transition-colors"><ChevronRight size={20} /></button>
-              </div>
-
-              <div className="flex bg-white rounded-xl p-1 shadow-sm border border-slate-200">
-                <button onClick={() => setViewMode('day')} className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${viewMode === 'day' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Day</button>
-                <button onClick={() => setViewMode('month')} className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${viewMode === 'month' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Month</button>
-              </div>
-           </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-           <button 
-             onClick={initGoogleSync}
-             disabled={isSyncing}
-             className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold border transition-all active:scale-95 shadow-sm hover:shadow-lg hover:-translate-y-0.5 ${
-               googleConnected 
-                ? 'bg-white text-slate-700 border-white' 
-                : 'bg-white text-slate-700 border-white'
-             }`}
-           >
-             {isSyncing ? (
-                 <RefreshCw size={18} className="animate-spin text-slate-400" />
-             ) : (
-                <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-                    <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
-                    <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" />
-                    <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" />
-                    <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.769 -21.864 51.959 -21.864 51.129 C -21.864 50.299 -21.734 49.489 -21.484 48.729 L -21.484 45.639 L -25.464 45.639 C -26.274 47.249 -26.734 49.069 -26.734 51.129 C -26.734 53.189 -26.274 55.009 -25.464 56.619 L -21.484 53.529 Z" />
-                    <path fill="#EA4335" d="M -14.754 43.749 C -12.984 43.749 -11.404 44.369 -10.154 45.579 L -6.724 42.149 C -8.804 40.209 -11.514 39 -14.754 39 C -19.444 39 -23.494 41.709 -25.464 45.639 L -21.484 48.729 C -20.534 45.879 -17.884 43.749 -14.754 43.749 Z" />
-                    </g>
-                </svg>
-             )}
-             <span className="text-sm font-bold text-slate-700">{googleConnected ? 'Sync Active' : 'Google Sync'}</span>
-           </button>
-           
-           <button 
-            onClick={() => setShowAddModal(true)}
-            className="h-12 w-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-lg hover:bg-blue-600 hover:shadow-blue-500/30 transition-all active:scale-95"
-           >
-             <Plus size={24} strokeWidth={3} />
-           </button>
-        </div>
-      </div>
-
-      {/* --- CONTENT PANEL --- */}
-      <div className="flex-1 glass-panel rounded-[32px] overflow-hidden relative w-full border border-white/60 shadow-xl">
-        
-        {/* DAY VIEW */}
-        {viewMode === 'day' && (
-          <div className="h-full overflow-y-auto custom-scrollbar relative flex bg-white/40">
-            {/* Time Axis */}
-            <div className="w-16 flex-shrink-0 border-r border-slate-200/50 bg-white/60 text-[10px] font-bold text-slate-400 py-4 text-center sticky left-0 z-30 backdrop-blur-md">
-              <div className="h-[1500px] relative"> 
-                 {timeSlots.map(hour => (
-                   <div key={hour} className="absolute w-full -translate-y-3" style={{ top: `${((hour - START_HOUR) / TOTAL_HOURS) * 100}%` }}>
-                     {hour}:00
-                   </div>
-                 ))}
-              </div>
+      {/* --- 1. DEDICATED HEADER (No Floating) --- */}
+      <div className="flex-none bg-white/80 backdrop-blur-xl border-b border-white/60 px-6 py-4 flex justify-between items-center shadow-sm z-50">
+         
+         {/* Branding & Date */}
+         <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+               <div className="w-8 h-8 flex flex-wrap gap-0.5 items-center justify-center bg-white/50 rounded-lg p-1">
+                   <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
+                   <div className="w-2.5 h-2.5 bg-amber-400 rounded-tr-md rounded-bl-md"></div>
+                   <div className="w-2.5 h-2.5 bg-pink-500 rounded-tl-md rounded-br-md"></div>
+                   <div className="w-2.5 h-2.5 bg-slate-900 rounded-full"></div>
+               </div>
+               <span className="font-black text-2xl text-slate-900 tracking-tight">bcf<span className="text-blue-500">.</span></span>
             </div>
 
-            {/* Grid & Events */}
-            <div className="flex-1 relative h-[1500px] min-w-full">
-               {/* Grid Lines */}
+            <div className="h-8 w-px bg-slate-200"></div>
+
+            <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1 bg-slate-100 rounded-full p-1">
+                    <button onClick={handlePrev} className="p-2 hover:bg-white rounded-full text-slate-500 hover:text-slate-900 shadow-sm transition-all"><ChevronLeft size={16} strokeWidth={3} /></button>
+                    <button onClick={handleNext} className="p-2 hover:bg-white rounded-full text-slate-500 hover:text-slate-900 shadow-sm transition-all"><ChevronRight size={16} strokeWidth={3} /></button>
+                </div>
+                <div>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-slate-900">{dayName}</span>
+                        <span className="text-xl font-medium text-slate-500">{dayNum}, {monthYear}</span>
+                    </div>
+                </div>
+                <button onClick={handleToday} className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-blue-100 transition-colors">
+                    {isToday ? 'Today' : 'Reset'}
+                </button>
+            </div>
+         </div>
+
+         {/* Actions */}
+         <div className="flex gap-3">
+            <button 
+                onClick={initGoogleSync} 
+                className="flex items-center gap-2 px-4 py-2 bg-white/90 border border-slate-200 rounded-xl hover:bg-white transition-colors shadow-sm"
+            >
+               {isSyncing ? (
+                 <RefreshCw size={18} className="animate-spin text-blue-500"/> 
+               ) : (
+                <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+                    <g transform="matrix(1, 0, 0, 1, 0, 0)">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </g>
+                </svg>
+               )}
+               <span className="font-bold text-sm text-slate-700">Sync</span>
+            </button>
+            <button 
+                onClick={() => setShowAddModal(true)} 
+                className="bg-slate-900 text-white px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-blue-600 transition-colors shadow-lg shadow-blue-900/10"
+            >
+               <Plus size={18} strokeWidth={3} />
+               <span className="font-bold text-sm">Add Event</span>
+            </button>
+         </div>
+      </div>
+
+      {/* --- 2. MAIN SCROLLABLE AREA --- */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+        
+        {viewMode === 'day' && (
+          <div className="w-full relative flex min-h-[1000px]"> 
+            
+            {/* Sidebar Time Axis */}
+            <div className="w-20 flex-shrink-0 bg-white/40 pt-4 backdrop-blur-sm border-r border-white/50">
+               {timeSlots.map(hour => (
+                   <div key={hour} className="relative h-[8.33%] text-right pr-4"> 
+                     <span className="text-xs font-bold text-slate-400 -top-2 relative">{hour}:00</span>
+                   </div>
+               ))}
+            </div>
+
+            {/* Event Grid */}
+            <div className="flex-1 relative">
+               {/* Horizontal Lines */}
                {timeSlots.map(hour => (
                  <div key={hour} className="absolute w-full border-t border-slate-200/50" style={{ top: `${((hour - START_HOUR) / TOTAL_HOURS) * 100}%` }} />
                ))}
 
                {/* Current Time Indicator */}
-               <div 
-                 className="absolute w-full border-t-2 border-red-500 z-50 pointer-events-none transition-all duration-1000"
-                 style={{ top: `${getCurrentTimeTop()}%` }}
-               >
-                 <div className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-red-500 rounded-full shadow-md"></div>
-               </div>
-               
+               {isToday && ( 
+                   <div 
+                     className="absolute w-full flex items-center z-30 pointer-events-none transition-all duration-1000"
+                     style={{ top: `${getCurrentTimeTop()}%` }}
+                   >
+                     <div className="w-full border-t-2 border-red-500 opacity-70"></div>
+                     <div className="absolute -left-1 w-2 h-2 bg-red-500 rounded-full"></div>
+                   </div>
+               )}
+
                {/* Events */}
                {layoutEvents.map(event => {
                   const style = getPositionStyle(event.startTime, event.endTime);
                   const isGoogle = !!event.googleEventId;
+                  const theme = getMeetEventStyle(event, isGoogle);
                   
-                  // Default Style: Clean White Card with Left Border Accent
-                  let bgColor = "bg-white";
-                  let accentColor = "#64748b"; // slate-500
-                  let textColor = "#334155"; // slate-700
-                  let iconColor = "#94a3b8"; // slate-400
-
-                  // Custom Logic for Meet Types
-                  if (event.type === 'meal') {
-                      bgColor = "bg-orange-50";
-                      accentColor = "#f97316";
-                      textColor = "#9a3412";
-                      iconColor = "#fdba74";
-                  } 
-                  if (event.type === 'break') {
-                      bgColor = "bg-slate-50";
-                      accentColor = "#cbd5e1";
-                  }
-                  if (event.type === 'workshop') {
-                      bgColor = "bg-pink-50";
-                      accentColor = "#ec4899";
-                      textColor = "#9d174d";
-                      iconColor = "#fbcfe8";
-                  }
-                  if (event.type === 'personal') {
-                      bgColor = "bg-emerald-50";
-                      accentColor = "#10b981";
-                      textColor = "#065f46";
-                      iconColor = "#6ee7b7";
-                  }
-                  if (event.type === 'lecture') {
-                      bgColor = "bg-blue-50";
-                      accentColor = "#3b82f6";
-                      textColor = "#1e40af";
-                      iconColor = "#93c5fd";
-                  }
-                  if (event.type === 'lab') {
-                      bgColor = "bg-purple-50";
-                      accentColor = "#a855f7";
-                      textColor = "#6b21a8";
-                      iconColor = "#d8b4fe";
-                  }
-
-                  // GOOGLE OVERRIDE - Dynamic Colors
-                  if (isGoogle) {
-                      bgColor = "bg-white";
-                      // Use a subtle pastel background logic or just white with colored border
-                      // Let's use the stringToBorder for accent
-                      accentColor = stringToBorder(event.title);
-                  }
-
                   return (
                     <div
                       key={event.eventId}
                       onClick={() => setSelectedEvent(event)}
                       className={`
-                        absolute rounded-lg px-3 py-2 cursor-pointer transition-all duration-200 overflow-hidden flex flex-col justify-between 
-                        ${bgColor}
-                        border-l-4 border-t border-r border-b border-white shadow-sm
-                        hover:z-40 hover:shadow-xl hover:scale-[1.01]
+                        absolute rounded-[18px] px-3 py-2 cursor-pointer transition-all duration-200 overflow-hidden flex flex-col justify-start gap-0.5
+                        ${theme.bg}
+                        group hover:z-50 hover:shadow-xl hover:scale-[1.02] hover:-translate-y-1
                       `}
                       style={{ 
                         top: style.top, 
                         height: style.height,
-                        left: `calc(${event.left}% + 0.5%)`, 
-                        width: `calc(${event.width}% - 1%)`,
+                        left: `calc(${event.left}% + 4px)`, 
+                        width: `calc(${event.width}% - 8px)`,
                         zIndex: event.left > 0 ? 20 : 10,
-                        borderLeftColor: accentColor
+                        border: theme.border,
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
                       }}
                     >
-                      <div className="flex-1 min-h-0">
-                         <div className={`font-bold text-xs leading-tight mb-1 flex items-start gap-1.5 ${event.isCrowded ? 'break-words' : 'truncate'}`} style={{ color: textColor }}>
-                            <span className="tracking-tight text-[13px]">{event.title}</span>
+                      <div className="flex flex-col h-full">
+                         <div className="flex justify-between items-start">
+                            <h4 className={`font-extrabold text-sm leading-tight ${theme.text} line-clamp-2`}>
+                                {event.title}
+                            </h4>
                          </div>
-                         {event.type !== 'break' && (
-                           <div className="flex flex-col gap-0.5 opacity-90" style={{ color: textColor }}>
-                              <span className="flex items-center gap-1 font-semibold text-[10px] truncate"><Clock size={10} color={iconColor} strokeWidth={3} /> {event.startTime} - {event.endTime}</span>
-                              {event.platform && !event.platform.startsWith('http') && <span className="flex items-center gap-1 font-semibold text-[10px] truncate max-w-full"><MapPin size={10} color={iconColor} strokeWidth={3} /> {event.platform}</span>}
-                           </div>
+
+                         {!theme.isBreak && (
+                             <div className={`mt-auto flex flex-col ${theme.text} opacity-90`}>
+                                <div className="flex items-center gap-1 text-[10px] font-bold uppercase">
+                                   <Clock size={10} strokeWidth={2.5} className={theme.icon} /> 
+                                   {event.startTime} - {event.endTime}
+                                </div>
+                                {event.platform && (
+                                    <div className="flex items-center gap-1 text-[10px] font-bold uppercase truncate">
+                                       <MapPin size={10} strokeWidth={2.5} className={theme.icon} />
+                                       <span className="truncate">{event.platform}</span>
+                                    </div>
+                                )}
+                             </div>
                          )}
                       </div>
                     </div>
                   );
                })}
-
-               {/* Reminders Bubble */}
-               {daysReminders.map(reminder => (
-                 <div 
-                   key={reminder.id}
-                   className="absolute left-[85%] z-40 w-56 -translate-y-1/2 group"
-                   style={{ top: `${getReminderTop(reminder.time)}%` }}
-                 >
-                   <div 
-                    onClick={() => onToggleReminder(reminder.id)}
-                    className={`relative flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg border cursor-pointer transition-all hover:scale-105 bg-white ${
-                      reminder.isCompleted 
-                        ? 'opacity-60 border-slate-200' 
-                        : 'border-red-100 hover:border-red-300'
-                    }`}
-                   >
-                     <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors flex-shrink-0 ${reminder.isCompleted ? 'bg-slate-200 border-transparent' : 'bg-red-50 border-red-200'}`}>
-                        {reminder.isCompleted && <Check size={12} className="text-slate-500" strokeWidth={3}/>}
-                     </div>
-                     <span className={`text-xs font-bold text-slate-800 ${reminder.isCompleted ? 'line-through text-slate-400' : ''}`}>{reminder.text}</span>
-                   </div>
-                 </div>
-               ))}
             </div>
           </div>
         )}
 
         {/* MONTH VIEW */}
         {viewMode === 'month' && (
-          <div className="h-full p-6 overflow-y-auto bg-white/40 backdrop-blur-xl">
+          <div className="p-8">
              <div className="grid grid-cols-7 mb-4 text-center">
                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                 <div key={d} className="text-xs font-bold text-slate-400 uppercase tracking-widest">{d}</div>
+                 <div key={d} className="text-xs font-black text-slate-300 uppercase tracking-widest">{d}</div>
                ))}
              </div>
-             <div className="grid grid-cols-7 auto-rows-fr gap-3 h-full min-h-[600px]">
+             <div className="grid grid-cols-7 auto-rows-fr gap-4 h-full min-h-[600px]">
                 {emptyDays.map(d => <div key={`empty-${d}`}></div>)}
                 {monthDays.map(day => {
                    const dateStr = new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toISOString().split('T')[0];
                    const dayEvents = schedule.filter(e => e.date === dateStr);
-                   const isToday = new Date().toDateString() === new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toDateString();
+                   const isTodayDay = new Date().toDateString() === new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toDateString();
                    
                    return (
                      <div 
                        key={day} 
-                       className={`relative bg-white/70 backdrop-blur-md p-3 rounded-2xl border border-white shadow-sm hover:shadow-lg transition-all cursor-pointer flex flex-col gap-1 ${isToday ? 'ring-2 ring-blue-500 shadow-blue-100' : ''}`}
+                       className={`relative bg-white/70 backdrop-blur-md p-3 rounded-[20px] border transition-all cursor-pointer flex flex-col gap-2 min-h-[120px] hover:shadow-lg ${isTodayDay ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-white hover:border-blue-200'}`}
                        onClick={() => {
                          setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
                          setViewMode('day');
                        }}
                      >
-                        <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{day}</span>
-                        <div className="flex flex-col gap-1 mt-1 overflow-hidden">
-                          {dayEvents.slice(0, 3).map(e => (
-                             <div key={e.eventId} className="w-full h-1.5 rounded-full bg-blue-100">
-                                <div className={`h-full rounded-full ${e.googleEventId ? 'bg-sky-400' : (e.type === 'lecture' ? 'bg-blue-500' : 'bg-emerald-400')}`}></div>
-                             </div>
-                          ))}
+                        <span className={`text-sm font-black w-8 h-8 flex items-center justify-center rounded-full ${isTodayDay ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>{day}</span>
+                        <div className="flex flex-col gap-1.5 mt-2">
+                          {dayEvents.slice(0, 4).map(e => {
+                             const theme = getMeetEventStyle(e, !!e.googleEventId);
+                             return (
+                                 <div key={e.eventId} className={`w-full h-1.5 rounded-full ${theme.bg.replace('bg-', 'bg-')}`} style={{ backgroundColor: theme.text.replace('text-', '') }}></div>
+                             );
+                          })}
                         </div>
                      </div>
                    );
@@ -533,11 +540,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       <div className="fixed bottom-24 right-6 z-50">
         <button
           onClick={() => setShowAI(!showAI)}
-          className={`flex items-center justify-center w-12 h-12 rounded-full shadow-lg transition-all duration-300 ${
-              showAI ? 'bg-white text-slate-900 rotate-45' : 'bg-slate-900 text-white hover:scale-110 hover:shadow-indigo-500/30'
+          className={`flex items-center justify-center w-14 h-14 rounded-full shadow-2xl transition-all duration-300 ${
+              showAI ? 'bg-white text-slate-900 rotate-45 border border-slate-200' : 'bg-slate-900 text-white hover:scale-110 hover:shadow-indigo-500/30'
           }`}
         >
-           {showAI ? <Plus size={24} /> : <Sparkles size={20} />}
+           {showAI ? <Plus size={28} /> : <Sparkles size={24} />}
         </button>
       </div>
 

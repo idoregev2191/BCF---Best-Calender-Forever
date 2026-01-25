@@ -40,21 +40,29 @@ const generateAfternoonScheduleDay1 = (dateStr: string, groupName: string, roomC
   { eventId: `DU-${groupName}-${dateStr}`, title: `${groupName} - Design Unit`, type: "workshop", date: dateStr, startTime: "17:15", endTime: "18:45", platform: roomENT, color: "#3B82F6" }
 ];
 
-// SPECIAL SCHEDULE FOR TUESDAY JAN 27 (Based on provided Google Calendar screenshot)
+// SPECIAL SCHEDULE FOR TUESDAY JAN 27 (Corrected to Screenshot)
 const generateJan27Special = (dateStr: string, groupName: string): MeetEvent[] => [
     { eventId: `WELCOME-${groupName}-${dateStr}`, title: "Welcoming & arrival to Venue", type: "personal", date: dateStr, startTime: "10:00", endTime: "10:30", platform: "", color: "#FBBF24" },
+    
     { eventId: `OPENING-${groupName}-${dateStr}`, title: "Opening presentation", type: "personal", date: dateStr, startTime: "10:30", endTime: "11:00", platform: "Auditorium", color: "#FBBF24" },
+    
     { eventId: `CS-WORK-${groupName}-${dateStr}`, title: "CS Worktime", type: "lecture", date: dateStr, startTime: "11:00", endTime: "12:30", platform: "", color: "#FBBF24" },
     
-    { eventId: `LUNCH-${groupName}-${dateStr}`, title: "Lunch", type: "meal", date: dateStr, startTime: "12:30", endTime: "13:30", platform: "Dining Hall", color: "#F59E0B" },
+    // Gap 12:30 - 12:45 usually moving, screenshot shows lunch starting 12:45
+    { eventId: `LUNCH-${groupName}-${dateStr}`, title: "Lunch", type: "meal", date: dateStr, startTime: "12:45", endTime: "13:30", platform: "Cafeteria", color: "#F59E0B" },
     
+    // CS Presentations start 13:30 (1:30 PM)
     { eventId: `CS-PRES-${groupName}-${dateStr}`, title: "CS Presentations", type: "lecture", date: dateStr, startTime: "13:30", endTime: "15:00", platform: "Main Hall", color: "#FBBF24" },
     
-    { eventId: `MOVING-${groupName}-${dateStr}`, title: "Moving to the next session", type: "break", date: dateStr, startTime: "15:00", endTime: "15:15", platform: "", color: "#9CA3AF" },
-    { eventId: `DU-${groupName}-${dateStr}`, title: "DU", type: "workshop", date: dateStr, startTime: "15:15", endTime: "16:15", platform: "Seminar Room", color: "#FBBF24" },
+    // Moving 15:00 - 15:15 (Implied)
+    
+    { eventId: `DU-${groupName}-${dateStr}`, title: "DU", type: "workshop", date: dateStr, startTime: "15:15", endTime: "16:15", platform: "", color: "#FBBF24" },
+    
     { eventId: `BREAK-CLOSE-${groupName}-${dateStr}`, title: "Break and moving to the closing", type: "break", date: dateStr, startTime: "16:15", endTime: "16:45", platform: "", color: "#9CA3AF" },
+    
     { eventId: `CLOSING-${groupName}-${dateStr}`, title: "Closing presentation + Buddies", type: "personal", date: dateStr, startTime: "16:45", endTime: "17:30", platform: "Auditorium", color: "#FBBF24" },
-    { eventId: `BUSSES-${groupName}-${dateStr}`, title: "Busses and goodbyes", type: "personal", date: dateStr, startTime: "17:30", endTime: "18:00", platform: "Parking Lot", color: "#F59E0B" }
+    
+    { eventId: `BUSSES-${groupName}-${dateStr}`, title: "Busses and goodbyes", type: "personal", date: dateStr, startTime: "17:30", endTime: "18:00", platform: "", color: "#F59E0B" }
 ];
 
 const generateAfternoonScheduleDay2 = (dateStr: string, groupName: string, roomCS: string, roomENT: string): MeetEvent[] => [

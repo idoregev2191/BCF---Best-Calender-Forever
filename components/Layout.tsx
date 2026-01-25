@@ -6,12 +6,12 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
-    <div className="min-h-screen w-full relative overflow-x-hidden text-slate-900">
+    <div className="h-screen w-full relative overflow-hidden text-slate-900 bg-[#f8fafc] flex flex-col">
       {/* Background */}
       <div className="meet-bg" />
 
-      {/* Content Container */}
-      <div className="relative z-10 w-full max-w-[1600px] mx-auto px-4 sm:px-6 py-6 h-screen flex flex-col">
+      {/* Content Container - Flex Col */}
+      <div className="relative z-10 w-full h-full flex flex-col">
          {children}
       </div>
     </div>
