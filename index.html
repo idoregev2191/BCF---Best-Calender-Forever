@@ -14,52 +14,32 @@
     <style>
       body {
         font-family: 'Outfit', sans-serif;
-        background-color: #ffffff;
+        background-color: #F8FAFC; /* Solid Slate-50 */
         color: #0f172a;
         overflow-x: hidden;
         -webkit-tap-highlight-color: transparent;
         -webkit-font-smoothing: antialiased;
       }
       
-      /* Modern Apple-like Mesh Gradient (Static & Clean) */
-      .meet-bg {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        z-index: -1;
-        background-color: #ffffff;
-        background-image: 
-            radial-gradient(at 0% 0%, hsla(253,16%,7%,0) 0, transparent 50%), 
-            radial-gradient(at 50% 0%, hsla(225,39%,30%,0) 0, transparent 50%), 
-            radial-gradient(at 100% 0%, hsla(339,49%,30%,0) 0, transparent 50%);
-        /* Adding soft colorful orbs */
-        background: 
-            radial-gradient(circle at 15% 50%, rgba(230, 240, 255, 0.8), transparent 40%),
-            radial-gradient(circle at 85% 30%, rgba(240, 230, 255, 0.8), transparent 40%),
-            radial-gradient(circle at 50% 80%, rgba(255, 240, 230, 0.6), transparent 40%);
-        filter: blur(40px);
-      }
-
-      /* Premium Glass Utilities */
-      .glass-panel {
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.6);
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
-      }
-      
       /* Scrollbar */
       .custom-scrollbar::-webkit-scrollbar {
-        width: 0px;
+        width: 6px;
+        height: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
         background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
       }
 
       .tap-active:active {
-        transform: scale(0.96);
-        transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: scale(0.98);
+        transition: transform 0.05s ease;
       }
     </style>
   <script type="importmap">
