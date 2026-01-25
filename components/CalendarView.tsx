@@ -23,9 +23,22 @@ interface CalendarViewProps {
 
 type ViewMode = 'day' | 'month';
 
+interface EventStyle {
+    bg: string;
+    border: string;
+    text: string;
+    subText: string;
+    accent?: string;
+    icon: string;
+    shadow: string;
+    isGoogle?: boolean;
+    isBreak?: boolean;
+    customStyle?: React.CSSProperties;
+}
+
 // --- VISUAL STYLE ALGORITHM ---
-const getMeetEventStyle = (event: MeetEvent, isGoogle: boolean) => {
-    // 1. Google Override - PREMIUM LOOK
+const getMeetEventStyle = (event: MeetEvent, isGoogle: boolean): EventStyle => {
+    // 1. Google Override - SOLID PASTEL LOOK
     if (isGoogle) {
         // Generate a stable color based on the title
         let hash = 0;
@@ -33,14 +46,17 @@ const getMeetEventStyle = (event: MeetEvent, isGoogle: boolean) => {
         const h = Math.abs(hash) % 360;
         
         return {
-            bg: "bg-white", 
-            border: `border-l-4`, // We will apply the color via style prop to border-color
-            borderColor: `hsl(${h}, 70%, 50%)`,
-            text: "text-slate-800",
-            subText: "text-slate-500",
-            accent: `hsl(${h}, 70%, 60%)`,
-            icon: "text-slate-400",
-            shadow: "shadow-sm border-y border-r border-slate-200",
+            bg: "bg-white", // Fallback class, overridden by customStyle
+            // We use customStyle to force a specific solid HSL color
+            customStyle: {
+                backgroundColor: `hsl(${h}, 85%, 96%)`, // Solid Light Pastel
+                borderLeftColor: `hsl(${h}, 65%, 55%)`  // Solid Darker Accent
+            },
+            border: `border-l-[5px] border-t border-b border-r border-slate-200/60`,
+            text: "text-slate-900",
+            subText: "text-slate-600",
+            icon: "text-slate-500",
+            shadow: "shadow-sm",
             isGoogle: true
         };
     }
@@ -51,7 +67,7 @@ const getMeetEventStyle = (event: MeetEvent, isGoogle: boolean) => {
     // CS / Tech -> Deep Blue
     if (titleUpper.includes("CS") || titleUpper.includes("PYTHON") || titleUpper.includes("JAVA") || titleUpper.includes("CODE")) {
         return {
-            bg: "bg-[#E0F2FE]", // Sky 100
+            bg: "bg-[#E0F2FE]", // Sky 100 - SOLID
             border: "border border-[#7DD3FC]", // Sky 300
             text: "text-[#0C4A6E]", // Sky 900
             subText: "text-[#0369A1]",
@@ -64,7 +80,7 @@ const getMeetEventStyle = (event: MeetEvent, isGoogle: boolean) => {
     // ENT / Business -> Warm Yellow
     if (titleUpper.includes("ENT") || titleUpper.includes("BUSINESS") || titleUpper.includes("PITCH") || titleUpper.includes("VALUE")) {
         return {
-            bg: "bg-[#FEF3C7]", // Amber 100
+            bg: "bg-[#FEF3C7]", // Amber 100 - SOLID
             border: "border border-[#FCD34D]", // Amber 300
             text: "text-[#78350F]", // Amber 900
             subText: "text-[#92400E]",
@@ -77,7 +93,7 @@ const getMeetEventStyle = (event: MeetEvent, isGoogle: boolean) => {
     // DU / Design -> Vivid Pink
     if (titleUpper.includes("DU") || titleUpper.includes("DESIGN") || titleUpper.includes("UX") || titleUpper.includes("WIREFRAM")) {
         return {
-            bg: "bg-[#FCE7F3]", // Pink 100
+            bg: "bg-[#FCE7F3]", // Pink 100 - SOLID
             border: "border border-[#F9A8D4]", // Pink 300
             text: "text-[#831843]", // Pink 900
             subText: "text-[#9D174D]",
@@ -90,7 +106,7 @@ const getMeetEventStyle = (event: MeetEvent, isGoogle: boolean) => {
     // MEALS -> Fresh Orange
     if (typeUpper === 'MEAL' || titleUpper.includes("LUNCH") || titleUpper.includes("DINNER") || titleUpper.includes("BREAKFAST")) {
         return {
-            bg: "bg-[#FFEDD5]", // Orange 100
+            bg: "bg-[#FFEDD5]", // Orange 100 - SOLID
             border: "border border-[#FDBA74]", // Orange 300
             text: "text-[#7C2D12]", // Orange 900
             subText: "text-[#9A3412]",
@@ -103,7 +119,7 @@ const getMeetEventStyle = (event: MeetEvent, isGoogle: boolean) => {
     // BREAKS -> Minimal Slate/Gray
     if (typeUpper === 'BREAK' || titleUpper.includes("MOVING")) {
         return {
-            bg: "bg-[#F1F5F9]", // Slate 100
+            bg: "bg-[#F1F5F9]", // Slate 100 - SOLID
             border: "border border-slate-300 border-dashed", 
             text: "text-[#475569]", // Slate 600
             subText: "text-[#64748B]",
@@ -117,7 +133,7 @@ const getMeetEventStyle = (event: MeetEvent, isGoogle: boolean) => {
     // PERSONAL / SOCIAL -> Purple
     if (typeUpper === 'PERSONAL' || titleUpper.includes("SOCIAL") || titleUpper.includes("FUN") || titleUpper.includes("CLOSING") || titleUpper.includes("OPENING") || titleUpper.includes("WELCOME")) {
         return {
-            bg: "bg-[#F3E8FF]", // Purple 100
+            bg: "bg-[#F3E8FF]", // Purple 100 - SOLID
             border: "border border-[#D8B4FE]", // Purple 300
             text: "text-[#581C87]", // Purple 900
             subText: "text-[#7E22CE]",
@@ -471,9 +487,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       key={event.eventId}
                       onClick={() => setSelectedEvent(event)}
                       className={`
-                        absolute rounded-[8px] px-3 py-2 cursor-pointer transition-all duration-200 overflow-hidden flex flex-col justify-start gap-0.5
+                        absolute rounded-lg px-3 py-2 cursor-pointer transition-all duration-200 overflow-hidden flex flex-col justify-start gap-0.5
                         ${theme.bg} ${theme.border} ${theme.shadow}
-                        group hover:z-50 hover:shadow-md hover:brightness-95
+                        group hover:z-50 hover:shadow-lg hover:brightness-[0.98]
                       `}
                       style={{ 
                         top: style.top, 
@@ -481,7 +497,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                         left: `calc(${event.left}% + 4px)`, 
                         width: `calc(${event.width}% - 8px)`,
                         zIndex: event.left > 0 ? 20 : 10,
-                        borderColor: isGoogle ? theme.borderColor : undefined // Apply specific google color
+                        ...(theme.customStyle || {})
                       }}
                     >
                       <div className="flex flex-col h-full">
@@ -545,7 +561,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                           {dayEvents.slice(0, 4).map(e => {
                              const theme = getMeetEventStyle(e, !!e.googleEventId);
                              return (
-                                 <div key={e.eventId} className={`w-full h-1.5 rounded-full ${theme.bg.replace('bg-', 'bg-')}`} style={{ backgroundColor: theme.accent ? '' : theme.borderColor }}></div>
+                                 <div key={e.eventId} className={`w-full h-1.5 rounded-full ${theme.bg.replace('bg-', 'bg-')}`} style={{ backgroundColor: theme.customStyle?.borderLeftColor || '' }}></div>
                              );
                           })}
                         </div>
