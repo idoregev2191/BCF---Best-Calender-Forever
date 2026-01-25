@@ -114,7 +114,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                 className={`group flex items-start gap-5 p-6 rounded-[24px] transition-all duration-300 border border-transparent ${
                   isDone 
                     ? 'bg-slate-100/40 opacity-50' 
-                    : 'bg-white/80 shadow-lg shadow-blue-900/5 hover:scale-[1.01] hover:border-blue-100'
+                    : 'bg-white/80 shadow-lg shadow-blue-900/5 hover:shadow-xl hover:border-blue-200'
                 }`}
               >
                 <button

@@ -473,7 +473,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       className={`
                         absolute rounded-[8px] px-3 py-2 cursor-pointer transition-all duration-200 overflow-hidden flex flex-col justify-start gap-0.5
                         ${theme.bg} ${theme.border} ${theme.shadow}
-                        group hover:z-50 hover:shadow-xl hover:scale-[1.01] hover:-translate-y-0.5
+                        group hover:z-50 hover:shadow-md hover:brightness-95
                       `}
                       style={{ 
                         top: style.top, 
