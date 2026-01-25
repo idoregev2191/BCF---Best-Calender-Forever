@@ -29,7 +29,8 @@ const AIModal: React.FC<AIModalProps> = ({ schedule, onClose }) => {
     setIsLoading(true);
 
     try {
-      const apiKey = process.env.API_KEY || ''; 
+      // Using the specific API key as requested
+      const apiKey = 'AIzaSyD_uhbrnWWM70MzLJ_0BATtNS9Vt1XybVg'; 
       
       const ai = new GoogleGenAI({ apiKey });
       
@@ -65,9 +66,20 @@ const AIModal: React.FC<AIModalProps> = ({ schedule, onClose }) => {
       const text = response.text || "I couldn't think of a response. Try again!";
       setMessages(prev => [...prev, { role: 'model', text }]);
 
-    } catch (e) {
-      console.error(e);
-      setMessages(prev => [...prev, { role: 'model', text: "I'm having trouble connecting right now." }]);
+    } catch (e: any) {
+      console.error("AI Error:", e);
+      let errorMessage = "I'm having trouble connecting right now.";
+
+      // Improved Error Handling
+      if (e.toString().includes('403') || e.toString().includes('KEY_INVALID')) {
+          errorMessage = "It looks like the API key is invalid or has expired.";
+      } else if (e.toString().includes('429') || e.toString().includes('RESOURCE_EXHAUSTED')) {
+          errorMessage = "I'm a bit overwhelmed right now (Rate Limit). Please try again in a moment.";
+      } else if (e.toString().includes('500') || e.toString().includes('503')) {
+          errorMessage = "My brain is having a temporary glitch (Server Error). Please try again later.";
+      }
+
+      setMessages(prev => [...prev, { role: 'model', text: errorMessage }]);
     }
     setIsLoading(false);
   };
