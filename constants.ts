@@ -42,8 +42,14 @@ const generateAfternoonScheduleDay1 = (dateStr: string, groupName: string, roomC
 
 // SPECIAL SCHEDULE FOR TUESDAY JAN 27 (Based on provided Google Calendar screenshot)
 const generateJan27Special = (dateStr: string, groupName: string): MeetEvent[] => [
+    { eventId: `WELCOME-${groupName}-${dateStr}`, title: "Welcoming & arrival to Venue", type: "personal", date: dateStr, startTime: "10:00", endTime: "10:30", platform: "", color: "#FBBF24" },
+    { eventId: `OPENING-${groupName}-${dateStr}`, title: "Opening presentation", type: "personal", date: dateStr, startTime: "10:30", endTime: "11:00", platform: "Auditorium", color: "#FBBF24" },
+    { eventId: `CS-WORK-${groupName}-${dateStr}`, title: "CS Worktime", type: "lecture", date: dateStr, startTime: "11:00", endTime: "12:30", platform: "", color: "#FBBF24" },
+    
     { eventId: `LUNCH-${groupName}-${dateStr}`, title: "Lunch", type: "meal", date: dateStr, startTime: "12:30", endTime: "13:30", platform: "Dining Hall", color: "#F59E0B" },
+    
     { eventId: `CS-PRES-${groupName}-${dateStr}`, title: "CS Presentations", type: "lecture", date: dateStr, startTime: "13:30", endTime: "15:00", platform: "Main Hall", color: "#FBBF24" },
+    
     { eventId: `MOVING-${groupName}-${dateStr}`, title: "Moving to the next session", type: "break", date: dateStr, startTime: "15:00", endTime: "15:15", platform: "", color: "#9CA3AF" },
     { eventId: `DU-${groupName}-${dateStr}`, title: "DU", type: "workshop", date: dateStr, startTime: "15:15", endTime: "16:15", platform: "Seminar Room", color: "#FBBF24" },
     { eventId: `BREAK-CLOSE-${groupName}-${dateStr}`, title: "Break and moving to the closing", type: "break", date: dateStr, startTime: "16:15", endTime: "16:45", platform: "", color: "#9CA3AF" },
@@ -75,26 +81,23 @@ const generateSchedule = (group: string): MeetEvent[] => {
 
   for (let i = -7; i < 7; i++) {
     const d = getDate(i);
-    const dateObj = new Date(d);
-    
-    // Exact Date Check for the Demo Requirement (Assuming the user's "Jan 27" screenshot context)
-    // We will inject this special schedule on Day 3 relative to start, or if date matches strictly '2025-01-27'
-    const isSpecialDay = d.endsWith('01-27') || (i === 0); // Injecting on TODAY (i=0) for visibility since user is likely testing now
-
-    if (isSpecialDay && !isMorning) {
-        // Force the Jan 27th schedule for afternoon groups (B/C) to match the screenshot provided
-        events.push(...generateJan27Special(d, group));
-    } else {
-        const cycle = Math.abs(i) % 2;
-        if (isMorning) {
-            if (cycle === 0) events.push(...generateMorningScheduleDay1(d, group, roomCS, roomENT));
-            else events.push(...generateMorningScheduleDay2(d, group, roomCS, roomENT));
-        } else {
-            if (cycle === 0) events.push(...generateAfternoonScheduleDay1(d, group, roomCS, roomENT));
-            else events.push(...generateAfternoonScheduleDay2(d, group, roomCS, roomENT));
-        }
+    // If today happens to be Jan 27 2026, we handle it below, otherwise normal gen
+    if (d !== '2026-01-27') {
+      const cycle = Math.abs(i) % 2;
+      if (isMorning) {
+          if (cycle === 0) events.push(...generateMorningScheduleDay1(d, group, roomCS, roomENT));
+          else events.push(...generateMorningScheduleDay2(d, group, roomCS, roomENT));
+      } else {
+          if (cycle === 0) events.push(...generateAfternoonScheduleDay1(d, group, roomCS, roomENT));
+          else events.push(...generateAfternoonScheduleDay2(d, group, roomCS, roomENT));
+      }
     }
   }
+
+  // FORCE JAN 27, 2026
+  const specialDate = "2026-01-27";
+  events.push(...generateJan27Special(specialDate, group));
+
   return events;
 };
 

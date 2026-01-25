@@ -23,6 +23,25 @@ interface CalendarViewProps {
 
 type ViewMode = 'day' | 'month';
 
+// Helper for consistent pastel colors from strings (for Google events)
+const stringToPastel = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash) % 360;
+  return `hsl(${h}, 70%, 95%)`; // Very light background
+};
+
+const stringToBorder = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash) % 360;
+    return `hsl(${h}, 70%, 50%)`; // Solid border color
+};
+
 const CalendarView: React.FC<CalendarViewProps> = ({ 
   user, 
   schedule, 
@@ -35,11 +54,22 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   onRefreshData
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('day');
-  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // DEMO DATE INITIALIZATION: 2026-01-27
+  const [currentDate, setCurrentDate] = useState(new Date("2026-01-27T10:00:00"));
+
   const [selectedEvent, setSelectedEvent] = useState<MeetEvent | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAI, setShowAI] = useState(false);
   
+  // Current Time Line
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
+
   // Google Sync States
   const [isSyncing, setIsSyncing] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -63,7 +93,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     else newDate.setMonth(currentDate.getMonth() + 1);
     setCurrentDate(newDate);
   };
-  const handleToday = () => setCurrentDate(new Date());
+  const handleToday = () => setCurrentDate(new Date("2026-01-27")); // Reset to Demo Date
 
   // --- GOOGLE SYNC LOGIC ---
   const initGoogleSync = async () => {
@@ -108,7 +138,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   // --- LAYOUT HELPERS ---
   const formattedTitle = viewMode === 'day' 
-    ? currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric' })
+    ? currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
     : currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const START_HOUR = 7;
@@ -125,31 +155,24 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const calculateEventLayout = (events: MeetEvent[]) => {
     if (events.length === 0) return [];
     
-    // 1. Sort by Start Time, then Duration (Longer first)
     const sorted = [...events].sort((a, b) => {
         const startA = getMinutes(a.startTime);
         const startB = getMinutes(b.startTime);
         if (startA !== startB) return startA - startB;
-        
-        const durA = getMinutes(a.endTime) - startA;
-        const durB = getMinutes(b.endTime) - startB;
-        return durB - durA;
+        return (getMinutes(b.endTime) - getMinutes(b.startTime)) - (getMinutes(a.endTime) - getMinutes(a.startTime));
     });
 
     const layoutEvents: any[] = [];
     const columns: MeetEvent[][] = [];
 
-    // 2. Pack into columns (non-overlapping per column)
     sorted.forEach(ev => {
       let placed = false;
       for (let i = 0; i < columns.length; i++) {
         const col = columns[i];
         const lastInCol = col[col.length - 1];
-        // If current event starts after the last one in this column ends, place it here
         if (getMinutes(ev.startTime) >= getMinutes(lastInCol.endTime)) {
           col.push(ev);
           placed = true;
-          // Temporarily store column index
           layoutEvents.push({ ...ev, colIndex: i });
           break;
         }
@@ -160,18 +183,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       }
     });
 
-    // 3. Determine Widths based on overlaps (connected groups)
-    // This is a simplified "bucket" approach for visual cleanliness
-    // Iterate through time slots to see how many columns are active at any given minute? 
-    // Optimization: Just use the max columns count for the day if simple, 
-    // or group by overlapping clusters.
-    
-    // Group into clusters of overlapping events
     const clusters: any[][] = [];
     let currentCluster: any[] = [];
     let clusterEnd = -1;
 
-    // Resort by start time for clustering
     const resortForCluster = [...layoutEvents].sort((a,b) => getMinutes(a.startTime) - getMinutes(b.startTime));
 
     resortForCluster.forEach(ev => {
@@ -194,32 +209,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     });
     if (currentCluster.length > 0) clusters.push(currentCluster);
 
-    // Calculate width/left for each cluster
     const finalEvents: any[] = [];
     clusters.forEach(cluster => {
-       // Find max column index used in this cluster to determine "width unit"
-       const uniqueCols = new Set(cluster.map(e => e.colIndex)).size;
+       const maxColInCluster = Math.max(...cluster.map(e => e.colIndex));
+       const count = maxColInCluster + 1;
+       
        cluster.forEach(ev => {
-         // Re-normalize column index within cluster to avoid gaps?
-         // For simplicity in this React view, we trust the greedy packing above.
-         // We just check how many columns *actually exist* in this specific overlap group.
-         
-         // A better heuristic for this specific UI:
-         // Count how many events intersect THIS event
-         const overlaps = cluster.filter(other => 
-            other !== ev && 
-            Math.max(getMinutes(ev.startTime), getMinutes(other.startTime)) < Math.min(getMinutes(ev.endTime), getMinutes(other.endTime))
-         );
-         
-         // If no overlaps, full width. If overlaps, share width.
-         const totalSharing = overlaps.length + 1;
-         
-         // Simple visual column logic:
-         // We use the colIndex assigned during packing. 
-         // But the total width is 100% / (max colIndex + 1) in this cluster.
-         const maxColInCluster = Math.max(...cluster.map(e => e.colIndex));
-         const count = maxColInCluster + 1;
-         
          finalEvents.push({
            ...ev,
            width: 100 / count,
@@ -239,9 +234,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     const totalDayMinutes = TOTAL_HOURS * 60;
     const top = ((startTotal - dayStart) / totalDayMinutes) * 100;
     
-    // Enforce Minimum Height of 30 mins worth of pixels roughly, for readability
+    // Ensure 15 min events are visible
     const rawHeight = ((endTotal - startTotal) / totalDayMinutes) * 100;
-    const height = Math.max(rawHeight, 3.5); 
+    const height = Math.max(rawHeight, 2.5); 
     
     return { top: `${top}%`, height: `${height}%` };
   };
@@ -250,6 +245,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     const total = getMinutes(time);
     const dayStart = START_HOUR * 60;
     return ((total - dayStart) / (TOTAL_HOURS * 60)) * 100;
+  };
+
+  const getCurrentTimeTop = () => {
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      const startMins = START_HOUR * 60;
+      const totalMins = TOTAL_HOURS * 60;
+      return ((nowMins - startMins) / totalMins) * 100;
   };
 
   const dateKey = currentDate.toISOString().split('T')[0];
@@ -293,30 +295,27 @@ const CalendarView: React.FC<CalendarViewProps> = ({
            </h1>
 
            <div className="flex items-center gap-3">
-              {/* Date Nav Pills */}
-              <div className="flex bg-white rounded-full p-1 shadow-sm border border-slate-200">
-                <button onClick={handlePrev} className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"><ChevronLeft size={20} /></button>
-                <button onClick={handleToday} className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 rounded-full transition-colors">Today</button>
-                <button onClick={handleNext} className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"><ChevronRight size={20} /></button>
+              <div className="flex bg-white rounded-xl p-1 shadow-sm border border-slate-200">
+                <button onClick={handlePrev} className="p-2 hover:bg-slate-50 rounded-lg text-slate-600 transition-colors"><ChevronLeft size={20} /></button>
+                <button onClick={handleToday} className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">Today (2026)</button>
+                <button onClick={handleNext} className="p-2 hover:bg-slate-50 rounded-lg text-slate-600 transition-colors"><ChevronRight size={20} /></button>
               </div>
 
-              {/* View Toggle */}
-              <div className="flex bg-white rounded-full p-1 shadow-sm border border-slate-200">
-                <button onClick={() => setViewMode('day')} className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-all ${viewMode === 'day' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Day</button>
-                <button onClick={() => setViewMode('month')} className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-all ${viewMode === 'month' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Month</button>
+              <div className="flex bg-white rounded-xl p-1 shadow-sm border border-slate-200">
+                <button onClick={() => setViewMode('day')} className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${viewMode === 'day' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Day</button>
+                <button onClick={() => setViewMode('month')} className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${viewMode === 'month' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Month</button>
               </div>
            </div>
         </div>
 
         <div className="flex items-center gap-3">
-           {/* Google Sync - NEW OFFICIAL DESIGN */}
            <button 
              onClick={initGoogleSync}
              disabled={isSyncing}
-             className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold border transition-all active:scale-95 shadow-sm hover:shadow-md ${
+             className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold border transition-all active:scale-95 shadow-sm hover:shadow-lg hover:-translate-y-0.5 ${
                googleConnected 
-                ? 'bg-white text-slate-700 border-slate-200' 
-                : 'bg-white text-slate-700 border-slate-200'
+                ? 'bg-white text-slate-700 border-white' 
+                : 'bg-white text-slate-700 border-white'
              }`}
            >
              {isSyncing ? (
@@ -331,10 +330,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                     </g>
                 </svg>
              )}
-             <span className="text-sm font-bold text-slate-700">{googleConnected ? 'Sync Active' : 'Sync with Google Calendar'}</span>
+             <span className="text-sm font-bold text-slate-700">{googleConnected ? 'Sync Active' : 'Google Sync'}</span>
            </button>
            
-           {/* Add Button */}
            <button 
             onClick={() => setShowAddModal(true)}
             className="h-12 w-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-lg hover:bg-blue-600 hover:shadow-blue-500/30 transition-all active:scale-95"
@@ -344,14 +342,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
       </div>
 
-      {/* --- GLASS PANEL CONTENT --- */}
-      <div className="flex-1 glass-panel rounded-[32px] overflow-hidden relative w-full">
+      {/* --- CONTENT PANEL --- */}
+      <div className="flex-1 glass-panel rounded-[32px] overflow-hidden relative w-full border border-white/60 shadow-xl">
         
         {/* DAY VIEW */}
         {viewMode === 'day' && (
-          <div className="h-full overflow-y-auto custom-scrollbar relative flex bg-white/50">
+          <div className="h-full overflow-y-auto custom-scrollbar relative flex bg-white/40">
             {/* Time Axis */}
-            <div className="w-16 flex-shrink-0 border-r border-slate-100 bg-white/40 text-[11px] font-bold text-slate-400 py-4 text-center sticky left-0 z-20 backdrop-blur-md">
+            <div className="w-16 flex-shrink-0 border-r border-slate-200/50 bg-white/60 text-[10px] font-bold text-slate-400 py-4 text-center sticky left-0 z-30 backdrop-blur-md">
               <div className="h-[1500px] relative"> 
                  {timeSlots.map(hour => (
                    <div key={hour} className="absolute w-full -translate-y-3" style={{ top: `${((hour - START_HOUR) / TOTAL_HOURS) * 100}%` }}>
@@ -362,57 +360,102 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             </div>
 
             {/* Grid & Events */}
-            <div className="flex-1 relative h-[1500px] min-w-[340px]">
+            <div className="flex-1 relative h-[1500px] min-w-full">
+               {/* Grid Lines */}
                {timeSlots.map(hour => (
-                 <div key={hour} className="absolute w-full border-t border-slate-100" style={{ top: `${((hour - START_HOUR) / TOTAL_HOURS) * 100}%` }} />
+                 <div key={hour} className="absolute w-full border-t border-slate-200/50" style={{ top: `${((hour - START_HOUR) / TOTAL_HOURS) * 100}%` }} />
                ))}
+
+               {/* Current Time Indicator */}
+               <div 
+                 className="absolute w-full border-t-2 border-red-500 z-50 pointer-events-none transition-all duration-1000"
+                 style={{ top: `${getCurrentTimeTop()}%` }}
+               >
+                 <div className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-red-500 rounded-full shadow-md"></div>
+               </div>
                
                {/* Events */}
                {layoutEvents.map(event => {
                   const style = getPositionStyle(event.startTime, event.endTime);
                   const isGoogle = !!event.googleEventId;
                   
-                  // SOLID, CLEAN COLORS (Not transparent) for readability
-                  let bgClass = "bg-white border-l-4 border-slate-200 text-slate-700";
-                  // Custom Logic for Meet Types
-                  if (event.type === 'meal') bgClass = "bg-[#FFF7ED] border-l-4 border-orange-400 text-orange-900"; // Orange-50 hex equivalent
-                  if (event.type === 'break') bgClass = "bg-slate-100 border-l-4 border-slate-300 text-slate-500 border-dashed"; 
-                  if (event.type === 'workshop') bgClass = "bg-[#FDF2F8] border-l-4 border-pink-400 text-pink-900"; // Pink-50
-                  if (event.type === 'personal') bgClass = "bg-[#ECFDF5] border-l-4 border-emerald-500 text-emerald-900"; // Emerald-50
-                  if (event.type === 'lecture') bgClass = "bg-[#EFF6FF] border-l-4 border-blue-500 text-blue-900"; // Blue-50
-                  if (event.type === 'lab') bgClass = "bg-[#FAF5FF] border-l-4 border-purple-500 text-purple-900"; // Purple-50
+                  // Default Style: Clean White Card with Left Border Accent
+                  let bgColor = "bg-white";
+                  let accentColor = "#64748b"; // slate-500
+                  let textColor = "#334155"; // slate-700
+                  let iconColor = "#94a3b8"; // slate-400
 
-                  // Google Override - Ensure Solid Text Color
-                  const customStyle = isGoogle && event.color ? { backgroundColor: event.color, color: '#fff', borderLeft: 'none' } : {};
+                  // Custom Logic for Meet Types
+                  if (event.type === 'meal') {
+                      bgColor = "bg-orange-50";
+                      accentColor = "#f97316";
+                      textColor = "#9a3412";
+                      iconColor = "#fdba74";
+                  } 
+                  if (event.type === 'break') {
+                      bgColor = "bg-slate-50";
+                      accentColor = "#cbd5e1";
+                  }
+                  if (event.type === 'workshop') {
+                      bgColor = "bg-pink-50";
+                      accentColor = "#ec4899";
+                      textColor = "#9d174d";
+                      iconColor = "#fbcfe8";
+                  }
+                  if (event.type === 'personal') {
+                      bgColor = "bg-emerald-50";
+                      accentColor = "#10b981";
+                      textColor = "#065f46";
+                      iconColor = "#6ee7b7";
+                  }
+                  if (event.type === 'lecture') {
+                      bgColor = "bg-blue-50";
+                      accentColor = "#3b82f6";
+                      textColor = "#1e40af";
+                      iconColor = "#93c5fd";
+                  }
+                  if (event.type === 'lab') {
+                      bgColor = "bg-purple-50";
+                      accentColor = "#a855f7";
+                      textColor = "#6b21a8";
+                      iconColor = "#d8b4fe";
+                  }
+
+                  // GOOGLE OVERRIDE - Dynamic Colors
+                  if (isGoogle) {
+                      bgColor = "bg-white";
+                      // Use a subtle pastel background logic or just white with colored border
+                      // Let's use the stringToBorder for accent
+                      accentColor = stringToBorder(event.title);
+                  }
 
                   return (
                     <div
                       key={event.eventId}
                       onClick={() => setSelectedEvent(event)}
                       className={`
-                        absolute rounded-xl px-2.5 py-2 cursor-pointer transition-all duration-200 overflow-hidden flex flex-col justify-between 
-                        border-2 border-white shadow-sm ring-1 ring-slate-900/5
-                        ${bgClass}
-                        hover:z-50 hover:shadow-lg hover:-translate-y-0.5
+                        absolute rounded-lg px-3 py-2 cursor-pointer transition-all duration-200 overflow-hidden flex flex-col justify-between 
+                        ${bgColor}
+                        border-l-4 border-t border-r border-b border-white shadow-sm
+                        hover:z-40 hover:shadow-xl hover:scale-[1.01]
                       `}
                       style={{ 
                         top: style.top, 
                         height: style.height,
-                        left: `calc(${event.left}% + 0.25%)`, 
-                        width: `calc(${event.width}% - 0.5%)`,
+                        left: `calc(${event.left}% + 0.5%)`, 
+                        width: `calc(${event.width}% - 1%)`,
                         zIndex: event.left > 0 ? 20 : 10,
-                        ...customStyle
+                        borderLeftColor: accentColor
                       }}
                     >
                       <div className="flex-1 min-h-0">
-                         <div className={`font-extrabold text-xs leading-tight mb-0.5 flex items-center gap-1.5 ${event.isCrowded ? 'break-words' : 'truncate'}`}>
-                            {isGoogle && !event.color && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
-                            <span className="tracking-tight">{event.title}</span>
+                         <div className={`font-bold text-xs leading-tight mb-1 flex items-start gap-1.5 ${event.isCrowded ? 'break-words' : 'truncate'}`} style={{ color: textColor }}>
+                            <span className="tracking-tight text-[13px]">{event.title}</span>
                          </div>
                          {event.type !== 'break' && (
-                           <div className={`flex flex-wrap items-center gap-x-3 gap-y-0.5 opacity-90 mt-0.5 ${isGoogle && event.color ? 'text-white/90' : ''}`}>
-                              <span className="flex items-center gap-1 font-semibold text-[10px] truncate"><Clock size={10} /> {event.startTime}</span>
-                              {event.platform && !event.platform.startsWith('http') && <span className="flex items-center gap-1 font-semibold text-[10px] truncate max-w-full"><MapPin size={10} /> {event.platform}</span>}
+                           <div className="flex flex-col gap-0.5 opacity-90" style={{ color: textColor }}>
+                              <span className="flex items-center gap-1 font-semibold text-[10px] truncate"><Clock size={10} color={iconColor} strokeWidth={3} /> {event.startTime} - {event.endTime}</span>
+                              {event.platform && !event.platform.startsWith('http') && <span className="flex items-center gap-1 font-semibold text-[10px] truncate max-w-full"><MapPin size={10} color={iconColor} strokeWidth={3} /> {event.platform}</span>}
                            </div>
                          )}
                       </div>
@@ -424,12 +467,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                {daysReminders.map(reminder => (
                  <div 
                    key={reminder.id}
-                   className="absolute left-[80%] z-40 w-56 -translate-y-1/2 group"
+                   className="absolute left-[85%] z-40 w-56 -translate-y-1/2 group"
                    style={{ top: `${getReminderTop(reminder.time)}%` }}
                  >
                    <div 
                     onClick={() => onToggleReminder(reminder.id)}
-                    className={`relative flex items-center gap-2 px-3 py-2 rounded-xl shadow-md border cursor-pointer transition-all hover:scale-105 bg-white ${
+                    className={`relative flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg border cursor-pointer transition-all hover:scale-105 bg-white ${
                       reminder.isCompleted 
                         ? 'opacity-60 border-slate-200' 
                         : 'border-red-100 hover:border-red-300'
@@ -442,20 +485,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                    </div>
                  </div>
                ))}
-
-               {/* Time Indicator */}
-               {dateKey === new Date().toISOString().split('T')[0] && (
-                  <div className="absolute w-full border-t-[2px] border-red-500 z-30 pointer-events-none" style={{ top: `${((new Date().getHours() * 60 + new Date().getMinutes() - (START_HOUR*60)) / (TOTAL_HOURS * 60)) * 100}%` }}>
-                    <div className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-red-500 rounded-full shadow-sm"></div>
-                  </div>
-               )}
             </div>
           </div>
         )}
 
         {/* MONTH VIEW */}
         {viewMode === 'month' && (
-          <div className="h-full p-6 overflow-y-auto bg-white/60">
+          <div className="h-full p-6 overflow-y-auto bg-white/40 backdrop-blur-xl">
              <div className="grid grid-cols-7 mb-4 text-center">
                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
                  <div key={d} className="text-xs font-bold text-slate-400 uppercase tracking-widest">{d}</div>
@@ -471,7 +507,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                    return (
                      <div 
                        key={day} 
-                       className={`relative bg-white p-3 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col gap-1 ${isToday ? 'ring-2 ring-blue-500 shadow-blue-100' : ''}`}
+                       className={`relative bg-white/70 backdrop-blur-md p-3 rounded-2xl border border-white shadow-sm hover:shadow-lg transition-all cursor-pointer flex flex-col gap-1 ${isToday ? 'ring-2 ring-blue-500 shadow-blue-100' : ''}`}
                        onClick={() => {
                          setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
                          setViewMode('day');
