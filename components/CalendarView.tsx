@@ -124,6 +124,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   
   const calculateEventLayout = (events: MeetEvent[]) => {
     if (events.length === 0) return [];
+    
+    // Sort primarily by Start Time, secondarily by Length (longer first to establish columns)
     const sorted = [...events].sort((a, b) => {
         const diffStart = getMinutes(a.startTime) - getMinutes(b.startTime);
         if (diffStart !== 0) return diffStart;
@@ -155,12 +157,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     if (currentCluster.length > 0) clusters.push(currentCluster);
 
     const layoutEvents: any[] = [];
+    
     clusters.forEach(cluster => {
         const columns: MeetEvent[][] = [];
         cluster.forEach(ev => {
             let placed = false;
             for (let i = 0; i < columns.length; i++) {
                 const lastInCol = columns[i][columns[i].length - 1];
+                // Check for overlap
                 if (getMinutes(ev.startTime) >= getMinutes(lastInCol.endTime)) {
                     columns[i].push(ev);
                     placed = true;
@@ -169,13 +173,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             }
             if (!placed) columns.push([ev]);
         });
+        
         const numCols = columns.length;
         columns.forEach((col, colIndex) => {
             col.forEach(ev => {
                 layoutEvents.push({
                     ...ev,
                     width: 100 / numCols,
-                    left: (100 / numCols) * colIndex
+                    left: (100 / numCols) * colIndex,
+                    isCrowded: numCols > 1
                 });
             });
         });
@@ -189,7 +195,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     const dayStart = START_HOUR * 60;
     const totalDayMinutes = TOTAL_HOURS * 60;
     const top = ((startTotal - dayStart) / totalDayMinutes) * 100;
-    const height = Math.max(((endTotal - startTotal) / totalDayMinutes) * 100, 2.5); 
+    
+    // Enforce Minimum Height of 4% (~30 mins visual) so text is readable
+    const rawHeight = ((endTotal - startTotal) / totalDayMinutes) * 100;
+    const height = Math.max(rawHeight, 4.5); 
+    
     return { top: `${top}%`, height: `${height}%` };
   };
 
@@ -319,59 +329,50 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   const style = getPositionStyle(event.startTime, event.endTime);
                   const isGoogle = !!event.googleEventId;
                   
-                  // Vibrant but Clean Colors
-                  let bgClass = "bg-white border-l-4 border-slate-300 text-slate-700 shadow-sm";
-                  let hoverClass = "hover:shadow-md hover:border-slate-400";
-                  
-                  if (event.type === 'meal') { bgClass = "bg-orange-50 border-l-4 border-orange-400 text-orange-900"; hoverClass="hover:shadow-orange-500/10 hover:bg-orange-100"; }
-                  if (event.type === 'break') { bgClass = "bg-slate-50 border-l-4 border-slate-300 text-slate-500 border-dashed"; hoverClass="hover:bg-slate-100"; }
-                  if (event.type === 'workshop') { bgClass = "bg-pink-50 border-l-4 border-pink-400 text-pink-900"; hoverClass="hover:shadow-pink-500/10 hover:bg-pink-100"; }
-                  if (event.type === 'personal') { bgClass = "bg-emerald-50 border-l-4 border-emerald-500 text-emerald-900"; hoverClass="hover:shadow-emerald-500/10 hover:bg-emerald-100"; }
-                  if (event.type === 'lecture') { bgClass = "bg-blue-50 border-l-4 border-blue-500 text-blue-900"; hoverClass="hover:shadow-blue-500/10 hover:bg-blue-100"; }
-                  if (event.type === 'lab') { bgClass = "bg-purple-50 border-l-4 border-purple-500 text-purple-900"; hoverClass="hover:shadow-purple-500/10 hover:bg-purple-100"; }
+                  // Vibrant but Clean Colors - Increased Opacity for Readability in overlap
+                  let bgClass = "bg-white border-l-4 border-slate-200 text-slate-700";
+                  // Default colors
+                  if (event.type === 'meal') bgClass = "bg-orange-50 border-l-4 border-orange-400 text-orange-900"; 
+                  if (event.type === 'break') bgClass = "bg-slate-100 border-l-4 border-slate-300 text-slate-500 border-dashed"; 
+                  if (event.type === 'workshop') bgClass = "bg-pink-50 border-l-4 border-pink-400 text-pink-900"; 
+                  if (event.type === 'personal') bgClass = "bg-emerald-50 border-l-4 border-emerald-500 text-emerald-900"; 
+                  if (event.type === 'lecture') bgClass = "bg-blue-50 border-l-4 border-blue-500 text-blue-900"; 
+                  if (event.type === 'lab') bgClass = "bg-purple-50 border-l-4 border-purple-500 text-purple-900"; 
 
                   // Google Override
-                  const customStyle = isGoogle && event.color ? { backgroundColor: event.color + '20', color: event.color, borderLeftColor: event.color } : {};
+                  const customStyle = isGoogle && event.color ? { backgroundColor: event.color, color: '#fff', borderLeft: 'none' } : {};
 
                   return (
                     <div
                       key={event.eventId}
                       onClick={() => setSelectedEvent(event)}
-                      className={`absolute rounded-r-xl px-3 py-2 text-xs cursor-pointer transition-all overflow-hidden flex flex-col justify-between ${bgClass} ${hoverClass}`}
+                      className={`
+                        absolute rounded-xl px-2.5 py-2 cursor-pointer transition-all duration-200 overflow-hidden flex flex-col justify-between 
+                        border-2 border-white/60 shadow-sm
+                        ${bgClass}
+                        hover:z-[60] hover:scale-[1.02] hover:shadow-2xl hover:border-slate-300/50
+                      `}
                       style={{ 
                         top: style.top, 
                         height: style.height,
-                        left: `${event.left}%`,
-                        width: `${event.width}%`,
-                        zIndex: event.left > 0 ? 10 : 1,
+                        left: `calc(${event.left}% + 0.5%)`, // Gap
+                        width: `calc(${event.width}% - 1%)`,  // Gap
+                        zIndex: event.left > 0 ? 20 : 10,     // Stacking
                         ...customStyle
                       }}
                     >
                       <div className="flex-1 min-h-0">
-                         <div className="font-extrabold text-sm truncate leading-tight mb-0.5 flex items-center gap-1.5">
-                            {isGoogle && <div className="w-1.5 h-1.5 rounded-full bg-current"></div>}
-                            <span className="truncate tracking-tight">{event.title}</span>
+                         <div className={`font-extrabold text-xs leading-tight mb-0.5 flex items-center gap-1.5 ${event.isCrowded ? 'break-words' : 'truncate'}`}>
+                            {isGoogle && !event.color && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
+                            <span className="tracking-tight">{event.title}</span>
                          </div>
                          {event.type !== 'break' && (
-                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 opacity-80 mt-1">
-                              <span className="flex items-center gap-1 font-semibold truncate"><Clock size={10} /> {event.startTime} - {event.endTime}</span>
-                              {event.platform && !event.platform.startsWith('http') && <span className="flex items-center gap-1 font-semibold truncate max-w-full"><MapPin size={10} /> {event.platform}</span>}
+                           <div className={`flex flex-wrap items-center gap-x-3 gap-y-0.5 opacity-90 mt-0.5 ${isGoogle && event.color ? 'text-white/90' : ''}`}>
+                              <span className="flex items-center gap-1 font-semibold text-[10px] truncate"><Clock size={10} /> {event.startTime}</span>
+                              {event.platform && !event.platform.startsWith('http') && <span className="flex items-center gap-1 font-semibold text-[10px] truncate max-w-full"><MapPin size={10} /> {event.platform}</span>}
                            </div>
                          )}
                       </div>
-                      {event.meetLink && (
-                        <div className="mt-1 flex-shrink-0">
-                           <a 
-                             href={event.meetLink} 
-                             target="_blank" 
-                             rel="noreferrer"
-                             onClick={(e) => e.stopPropagation()} 
-                             className="inline-flex items-center gap-1 bg-white/80 text-blue-600 px-2 py-1.5 rounded-md shadow-sm font-bold hover:bg-blue-600 hover:text-white transition-all w-full justify-center"
-                           >
-                              <Video size={10} /> Join
-                           </a>
-                        </div>
-                      )}
                     </div>
                   );
                })}
