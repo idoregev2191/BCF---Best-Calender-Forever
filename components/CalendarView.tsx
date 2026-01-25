@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserState, MeetEvent, StandaloneReminder, GoogleCalendarInfo } from '../types';
-import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Check, RefreshCw, LogOut, Video, Sparkles, Sun, Moon, Calendar as CalIcon, Settings, X, MoreHorizontal } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Check, RefreshCw, Video, Sparkles } from 'lucide-react';
 import EventModal from './EventModal';
 import AddEventModal from './AddEventModal';
 import DeveloperTools from './DeveloperTools';
@@ -95,7 +95,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       setShowCalSelector(false);
       setIsSyncing(true);
       const selectedCals = availableCalendars.filter(c => c.selected);
-      // Pass User Group to filtered events properly!
       const events = await GoogleCalendarService.fetchEvents(selectedCals, user.group);
       onImportEvents(events);
       setGoogleConnected(true);
@@ -122,71 +121,115 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     return h * 60 + m;
   };
   
+  // Robust Layout Algorithm for Side-by-Side Events
   const calculateEventLayout = (events: MeetEvent[]) => {
     if (events.length === 0) return [];
     
-    // Sort primarily by Start Time, secondarily by Length (longer first to establish columns)
+    // 1. Sort by Start Time, then Duration (Longer first)
     const sorted = [...events].sort((a, b) => {
-        const diffStart = getMinutes(a.startTime) - getMinutes(b.startTime);
-        if (diffStart !== 0) return diffStart;
-        return getMinutes(b.endTime) - getMinutes(a.endTime);
+        const startA = getMinutes(a.startTime);
+        const startB = getMinutes(b.startTime);
+        if (startA !== startB) return startA - startB;
+        
+        const durA = getMinutes(a.endTime) - startA;
+        const durB = getMinutes(b.endTime) - startB;
+        return durB - durA;
     });
 
-    const clusters: MeetEvent[][] = [];
-    let currentCluster: MeetEvent[] = [];
+    const layoutEvents: any[] = [];
+    const columns: MeetEvent[][] = [];
+
+    // 2. Pack into columns (non-overlapping per column)
+    sorted.forEach(ev => {
+      let placed = false;
+      for (let i = 0; i < columns.length; i++) {
+        const col = columns[i];
+        const lastInCol = col[col.length - 1];
+        // If current event starts after the last one in this column ends, place it here
+        if (getMinutes(ev.startTime) >= getMinutes(lastInCol.endTime)) {
+          col.push(ev);
+          placed = true;
+          // Temporarily store column index
+          layoutEvents.push({ ...ev, colIndex: i });
+          break;
+        }
+      }
+      if (!placed) {
+        columns.push([ev]);
+        layoutEvents.push({ ...ev, colIndex: columns.length - 1 });
+      }
+    });
+
+    // 3. Determine Widths based on overlaps (connected groups)
+    // This is a simplified "bucket" approach for visual cleanliness
+    // Iterate through time slots to see how many columns are active at any given minute? 
+    // Optimization: Just use the max columns count for the day if simple, 
+    // or group by overlapping clusters.
+    
+    // Group into clusters of overlapping events
+    const clusters: any[][] = [];
+    let currentCluster: any[] = [];
     let clusterEnd = -1;
 
-    sorted.forEach(ev => {
-        const start = getMinutes(ev.startTime);
-        const end = getMinutes(ev.endTime);
+    // Resort by start time for clustering
+    const resortForCluster = [...layoutEvents].sort((a,b) => getMinutes(a.startTime) - getMinutes(b.startTime));
 
-        if (currentCluster.length === 0) {
-            currentCluster.push(ev);
-            clusterEnd = end;
-        } else {
-            if (start < clusterEnd) {
-                currentCluster.push(ev);
-                clusterEnd = Math.max(clusterEnd, end);
-            } else {
-                clusters.push(currentCluster);
-                currentCluster = [ev];
-                clusterEnd = end;
-            }
-        }
+    resortForCluster.forEach(ev => {
+       const start = getMinutes(ev.startTime);
+       const end = getMinutes(ev.endTime);
+       
+       if (currentCluster.length === 0) {
+         currentCluster.push(ev);
+         clusterEnd = end;
+       } else {
+         if (start < clusterEnd) {
+           currentCluster.push(ev);
+           clusterEnd = Math.max(clusterEnd, end);
+         } else {
+           clusters.push(currentCluster);
+           currentCluster = [ev];
+           clusterEnd = end;
+         }
+       }
     });
     if (currentCluster.length > 0) clusters.push(currentCluster);
 
-    const layoutEvents: any[] = [];
-    
+    // Calculate width/left for each cluster
+    const finalEvents: any[] = [];
     clusters.forEach(cluster => {
-        const columns: MeetEvent[][] = [];
-        cluster.forEach(ev => {
-            let placed = false;
-            for (let i = 0; i < columns.length; i++) {
-                const lastInCol = columns[i][columns[i].length - 1];
-                // Check for overlap
-                if (getMinutes(ev.startTime) >= getMinutes(lastInCol.endTime)) {
-                    columns[i].push(ev);
-                    placed = true;
-                    break;
-                }
-            }
-            if (!placed) columns.push([ev]);
-        });
-        
-        const numCols = columns.length;
-        columns.forEach((col, colIndex) => {
-            col.forEach(ev => {
-                layoutEvents.push({
-                    ...ev,
-                    width: 100 / numCols,
-                    left: (100 / numCols) * colIndex,
-                    isCrowded: numCols > 1
-                });
-            });
-        });
+       // Find max column index used in this cluster to determine "width unit"
+       const uniqueCols = new Set(cluster.map(e => e.colIndex)).size;
+       cluster.forEach(ev => {
+         // Re-normalize column index within cluster to avoid gaps?
+         // For simplicity in this React view, we trust the greedy packing above.
+         // We just check how many columns *actually exist* in this specific overlap group.
+         
+         // A better heuristic for this specific UI:
+         // Count how many events intersect THIS event
+         const overlaps = cluster.filter(other => 
+            other !== ev && 
+            Math.max(getMinutes(ev.startTime), getMinutes(other.startTime)) < Math.min(getMinutes(ev.endTime), getMinutes(other.endTime))
+         );
+         
+         // If no overlaps, full width. If overlaps, share width.
+         const totalSharing = overlaps.length + 1;
+         
+         // Simple visual column logic:
+         // We use the colIndex assigned during packing. 
+         // But the total width is 100% / (max colIndex + 1) in this cluster.
+         const maxColInCluster = Math.max(...cluster.map(e => e.colIndex));
+         const count = maxColInCluster + 1;
+         
+         finalEvents.push({
+           ...ev,
+           width: 100 / count,
+           left: (100 / count) * ev.colIndex,
+           isCrowded: count > 2
+         });
+       });
     });
-    return layoutEvents;
+
+    return finalEvents;
   };
 
   const getPositionStyle = (startTime: string, endTime: string) => {
@@ -196,9 +239,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     const totalDayMinutes = TOTAL_HOURS * 60;
     const top = ((startTotal - dayStart) / totalDayMinutes) * 100;
     
-    // Enforce Minimum Height of 4% (~30 mins visual) so text is readable
+    // Enforce Minimum Height of 30 mins worth of pixels roughly, for readability
     const rawHeight = ((endTotal - startTotal) / totalDayMinutes) * 100;
-    const height = Math.max(rawHeight, 4.5); 
+    const height = Math.max(rawHeight, 3.5); 
     
     return { top: `${top}%`, height: `${height}%` };
   };
@@ -329,17 +372,17 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   const style = getPositionStyle(event.startTime, event.endTime);
                   const isGoogle = !!event.googleEventId;
                   
-                  // Vibrant but Clean Colors - Increased Opacity for Readability in overlap
+                  // SOLID, CLEAN COLORS (Not transparent) for readability
                   let bgClass = "bg-white border-l-4 border-slate-200 text-slate-700";
-                  // Default colors
-                  if (event.type === 'meal') bgClass = "bg-orange-50 border-l-4 border-orange-400 text-orange-900"; 
+                  // Custom Logic for Meet Types
+                  if (event.type === 'meal') bgClass = "bg-[#FFF7ED] border-l-4 border-orange-400 text-orange-900"; // Orange-50 hex equivalent
                   if (event.type === 'break') bgClass = "bg-slate-100 border-l-4 border-slate-300 text-slate-500 border-dashed"; 
-                  if (event.type === 'workshop') bgClass = "bg-pink-50 border-l-4 border-pink-400 text-pink-900"; 
-                  if (event.type === 'personal') bgClass = "bg-emerald-50 border-l-4 border-emerald-500 text-emerald-900"; 
-                  if (event.type === 'lecture') bgClass = "bg-blue-50 border-l-4 border-blue-500 text-blue-900"; 
-                  if (event.type === 'lab') bgClass = "bg-purple-50 border-l-4 border-purple-500 text-purple-900"; 
+                  if (event.type === 'workshop') bgClass = "bg-[#FDF2F8] border-l-4 border-pink-400 text-pink-900"; // Pink-50
+                  if (event.type === 'personal') bgClass = "bg-[#ECFDF5] border-l-4 border-emerald-500 text-emerald-900"; // Emerald-50
+                  if (event.type === 'lecture') bgClass = "bg-[#EFF6FF] border-l-4 border-blue-500 text-blue-900"; // Blue-50
+                  if (event.type === 'lab') bgClass = "bg-[#FAF5FF] border-l-4 border-purple-500 text-purple-900"; // Purple-50
 
-                  // Google Override
+                  // Google Override - Ensure Solid Text Color
                   const customStyle = isGoogle && event.color ? { backgroundColor: event.color, color: '#fff', borderLeft: 'none' } : {};
 
                   return (
@@ -348,16 +391,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       onClick={() => setSelectedEvent(event)}
                       className={`
                         absolute rounded-xl px-2.5 py-2 cursor-pointer transition-all duration-200 overflow-hidden flex flex-col justify-between 
-                        border-2 border-white/60 shadow-sm
+                        border-2 border-white shadow-sm ring-1 ring-slate-900/5
                         ${bgClass}
-                        hover:z-[60] hover:scale-[1.02] hover:shadow-2xl hover:border-slate-300/50
+                        hover:z-50 hover:shadow-lg hover:-translate-y-0.5
                       `}
                       style={{ 
                         top: style.top, 
                         height: style.height,
-                        left: `calc(${event.left}% + 0.5%)`, // Gap
-                        width: `calc(${event.width}% - 1%)`,  // Gap
-                        zIndex: event.left > 0 ? 20 : 10,     // Stacking
+                        left: `calc(${event.left}% + 0.25%)`, 
+                        width: `calc(${event.width}% - 0.5%)`,
+                        zIndex: event.left > 0 ? 20 : 10,
                         ...customStyle
                       }}
                     >
