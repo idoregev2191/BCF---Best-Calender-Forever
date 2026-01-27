@@ -20,6 +20,39 @@ const AIModal: React.FC<AIModalProps> = ({ schedule, onClose }) => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
+  const generateAIResponse = async (apiKey: string, userMsg: ChatMessage) => {
+    // Initializing with the provided key string as requested for fallback logic
+    const ai = new GoogleGenAI({ apiKey });
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Simplify the schedule for the AI to save tokens but give full context
+    const simpleSchedule = schedule.map(e => `${e.date} (${e.startTime}-${e.endTime}): ${e.title} at ${e.platform || 'Location TBD'}`).join('\n');
+
+    const context = `
+      You are a super helpful, friendly, and cool AI assistant for a student at a summer program called MEET. 
+      Current Date: ${today}.
+      
+      Here is the student's FULL schedule:
+      ${simpleSchedule}
+      
+      Your Goal: Help them manage their time, find out when their next break is, or what class they have next week.
+      Tone: Friendly, casual, nice, but very helpful. Not robotic.
+      
+      Formatting:
+      - Use **bold** for key info like times or room names.
+      - Keep it relatively short.
+    `;
+
+    return await ai.models.generateContent({
+      model: 'gemini-3-flash-preview', 
+      contents: [
+          { role: 'user', parts: [{ text: context }] },
+          ...messages.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+          { role: 'user', parts: [{ text: userMsg.text }] }
+      ]
+    });
+  };
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -28,51 +61,30 @@ const AIModal: React.FC<AIModalProps> = ({ schedule, onClose }) => {
     setInput('');
     setIsLoading(true);
 
+    // Primary and Fallback Keys provided by user
+    const primaryKey = 'AIzaSyD_uhbrnWWM70MzLJ_0BATtNS9Vt1XybVg';
+    const fallbackKey = 'AIzaSyBStQ21-WRhkO85637FvqHEeGmNwJJih1s';
+
     try {
-      // Using the specific API key as requested
-      const apiKey = 'AIzaSyD_uhbrnWWM70MzLJ_0BATtNS9Vt1XybVg'; 
-      
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Simplify the schedule for the AI to save tokens but give full context
-      const simpleSchedule = schedule.map(e => `${e.date} (${e.startTime}-${e.endTime}): ${e.title} at ${e.platform || 'Location TBD'}`).join('\n');
-
-      const context = `
-        You are a super helpful, friendly, and cool AI assistant for a student at a summer program called MEET. 
-        Current Date: ${today}.
-        
-        Here is the student's FULL schedule:
-        ${simpleSchedule}
-        
-        Your Goal: Help them manage their time, find out when their next break is, or what class they have next week.
-        Tone: Friendly, casual, nice, but very helpful. Not robotic.
-        
-        Formatting:
-        - Use **bold** for key info like times or room names.
-        - Keep it relatively short.
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview', 
-        contents: [
-            { role: 'user', parts: [{ text: context }] },
-            ...messages.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-            { role: 'user', parts: [{ text: userMsg.text }] }
-        ]
-      });
-
-      const text = response.text || "I couldn't think of a response. Try again!";
-      setMessages(prev => [...prev, { role: 'model', text }]);
-
+      try {
+        // Attempt 1: Primary Key
+        const response = await generateAIResponse(primaryKey, userMsg);
+        const text = response.text || "I couldn't think of a response. Try again!";
+        setMessages(prev => [...prev, { role: 'model', text }]);
+      } catch (primaryError) {
+        console.warn("Primary API key failed, trying fallback...", primaryError);
+        // Attempt 2: Fallback Key
+        const response = await generateAIResponse(fallbackKey, userMsg);
+        const text = response.text || "I couldn't think of a response. Try again!";
+        setMessages(prev => [...prev, { role: 'model', text }]);
+      }
     } catch (e: any) {
-      console.error("AI Error:", e);
+      console.error("AI Error (Final):", e);
       let errorMessage = "I'm having trouble connecting right now.";
 
       // Improved Error Handling
       if (e.toString().includes('403') || e.toString().includes('KEY_INVALID')) {
-          errorMessage = "It looks like the API key is invalid or has expired.";
+          errorMessage = "It looks like both API keys are currently unavailable.";
       } else if (e.toString().includes('429') || e.toString().includes('RESOURCE_EXHAUSTED')) {
           errorMessage = "I'm a bit overwhelmed right now (Rate Limit). Please try again in a moment.";
       } else if (e.toString().includes('500') || e.toString().includes('503')) {
@@ -84,7 +96,6 @@ const AIModal: React.FC<AIModalProps> = ({ schedule, onClose }) => {
     setIsLoading(false);
   };
 
-  // Helper to render bold text from markdown style **text**
   const renderMessageText = (text: string) => {
     const parts = text.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, index) => {
